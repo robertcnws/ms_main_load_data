@@ -1,0 +1,17 @@
+<!-- templates/sistema_confirm_delete.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Delete Permission Module System</title>
+</head>
+<body>
+    <h1>Delete Permission Module System</h1>
+    <p>Are you sure to delete Permission Module System: "{{ permission.name }}"?</p>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit">Confirm Deletion</button>
+    </form>
+    <a href="{% url 'permission_module_system_list' %}">Cancel</a>
+</body>
+</html>

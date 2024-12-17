@@ -1,0 +1,17 @@
+<!-- templates/sistema_form.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% if system %}Edit System{% else %}Create System{% endif %}</title>
+</head>
+<body>
+    <h1>{% if system %}Edit System{% else %}Create System{% endif %}</h1>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">{% if system %}Update{% else %}Create{% endif %}</button>
+    </form>
+    <a href="{% url 'system_list' %}">Back to list</a>
+</body>
+</html>

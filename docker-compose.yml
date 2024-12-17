@@ -1,0 +1,99 @@
+services:
+  mongodb_main_load_data:
+    build:
+      context: ./mongo_db
+    container_name: mongodb_main_load_data
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    env_file:
+      - ./mongo_db/.env
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo_db/init:/docker-entrypoint-initdb.d
+    networks:
+      - net_main_load_data
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4g
+        reservations:
+          cpus: '1.0'
+          memory: 2g
+
+  mongoexpress_main_load_data:
+    image: mongo-express:latest
+    container_name: mongoexpress_main_load_data
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    env_file:
+      - ./mongo_express/.env
+    depends_on:
+      - mongodb_main_load_data
+    networks:
+      - net_main_load_data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512m
+        reservations:
+          cpus: '0.25'
+          memory: 256m
+
+  ms_main_load_data:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: ms_main_load_data
+    restart: unless-stopped
+    volumes:
+      - ./app:/app
+      - ./app/ms_main_load_data/gunicorn.conf.py:/etc/nginx/gunicorn.conf.py
+      - ./app/static:/app/staticfiles
+    ports:
+      - "8005:8000"
+    depends_on:
+      - mongodb_main_load_data
+      - redis_main_load_data
+    env_file:
+      - ./app/.env
+    networks:
+      - net_main_load_data
+
+  nginx_main_load_data:
+    image: nginx:latest
+    container_name: nginx_main_load_data
+    restart: unless-stopped
+    ports:
+      - "81:80"
+      - "444:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - ms_main_load_data
+      # - mongoexpress_main_load_data
+    networks:
+      - net_main_load_data
+
+  redis_main_load_data:
+    image: redis:latest
+    container_name: redis_main_load_data
+    restart: unless-stopped
+    ports:
+      - "6389:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - net_main_load_data
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  net_main_load_data:
+    driver: bridge

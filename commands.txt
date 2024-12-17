@@ -1,0 +1,27 @@
+COMANDOS PARA APP
+
+DJANGO:
+python -m venv venv  
+venv\Scripts\activate 
+pip install django 
+django-admin --version 
+django-admin startproject ms_main_load_data .
+python manage.py startapp ms_load_from_zoho  
+pip freeze > ms_main_load_data/requirements.txt
+
+
+DOCKER:
+docker compose down
+docker compose up -d --build
+docker compose down <container>
+docker compose up <container> -d
+
+
+SSL:
+openssl genpkey -algorithm RSA -out nginx/certs/dns_key.pem
+openssl req -new -key nginx/certs/dns_key.pem -x509 -days 365 -out nginx/certs/dns_cert.crt
+openssl pkcs12 -export -out nginx/certs/dns_cert.pfx -inkey nginx/certs/dns_key.pem -in nginx/certs/dns_cert.crt
+openssl pkcs12 -in nginx/certs/dns_cert.pfx -out nginx/certs/dns_cert.pem -nodes -clcerts
+openssl pkcs12 -in nginx/certs/dns_cert.pfx -out nginx/certs/dns_key.pem -nodes -nocerts
+openssl pkcs12 -in nginx/certs/dns_cert.pfx -out nginx/certs/dns_chain.pem -nodes -nokeys -clcerts
+

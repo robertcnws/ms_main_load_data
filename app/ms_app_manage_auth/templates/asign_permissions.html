@@ -1,0 +1,17 @@
+<!-- templates/asignar_permisos.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Asign Permissions to Users</title>
+</head>
+<body>
+    <h1>Asign Permissions to Users</h1>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Asign Permissions</button>
+    </form>
+    <a href="{% url 'main_manage_auth' %}">Back to main</a>
+</body>
+</html>

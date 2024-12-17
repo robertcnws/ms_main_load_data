@@ -1,0 +1,36 @@
+<!-- templates/sistema_list.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Modules Systems List</title>
+</head>
+<body>
+    <h1>Modules Systems</h1>
+    <a href="{% url 'module_system_create' %}">Create New Module System</a>
+    <a href="{% url 'main_manage_auth' %}">Back to main</a>
+    <table style="padding: 10px; border: 1px solid black;">
+        <thead>
+            <tr>
+                <th style="padding: 10px; border: 1px solid black;">Name</th>
+                <th style="padding: 10px; border: 1px solid black;">Description</th>
+                <th style="padding: 10px; border: 1px solid black;">System</th>
+                <th style="padding: 10px; border: 1px solid black;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for module in modules %}
+                <tr>
+                    <td style="padding: 10px; border: 1px solid black;">{{ module.name }}</td>
+                    <td style="padding: 10px; border: 1px solid black;">{{ module.description }}</td>
+                    <td style="padding: 10px; border: 1px solid black;">{{ module.system.name }}</td>
+                    <td style="padding: 10px; border: 1px solid black;">
+                        <a href="{% url 'module_system_update' module.id %}">Edit</a>
+                        <a href="{% url 'module_system_delete' module.id %}">Delete</a>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<!-- templates/sistema_confirm_delete.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Delete System</title>
+</head>
+<body>
+    <h1>Delete System</h1>
+    <p>Are you sure to delete System: "{{ system.name }}"?</p>
+    <form method="post">
+        {% csrf_token %}
+        <button type="submit">Confirm Deletion</button>
+    </form>
+    <a href="{% url 'system_list' %}">Cancel</a>
+</body>
+</html>

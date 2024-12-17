@@ -1,0 +1,17 @@
+<!-- templates/sistema_form.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% if permission  %}Edit Permission Module System{% else %}Create Permission Module System{% endif %}</title>
+</head>
+<body>
+    <h1>{% if permission %}Edit Permission Module System{% else %}Create Permission Module System{% endif %}</h1>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">{% if permission %}Update{% else %}Create{% endif %}</button>
+    </form>
+    <a href="{% url 'permission_module_system_list' %}">Back to list</a>
+</body>
+</html>

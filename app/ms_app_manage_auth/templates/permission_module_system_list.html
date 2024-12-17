@@ -1,0 +1,39 @@
+<!-- templates/sistema_list.html -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Permissions Modules Systems List</title>
+</head>
+<body>
+    <h1>Permissions Modules Systems</h1>
+    <a href="{% url 'permission_module_system_create' %}">Create New Permission Module System</a>
+    <a href="{% url 'main_manage_auth' %}">Back to main</a>
+    <br/>
+    <table style="padding: 10px; border: 1px solid black;">
+        <thead>
+            <tr>
+                <th style="padding: 10px; border: 1px solid black;">Name</th>
+                <th style="padding: 10px; border: 1px solid black;">Description</th>
+                <th style="padding: 10px; border: 1px solid black;">Module</th>
+                <th style="padding: 10px; border: 1px solid black;">System</th>
+                <th style="padding: 10px; border: 1px solid black;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for permission in permissions %}
+                <tr>
+                    <td style="padding: 10px; border: 1px solid black;">{{ permission.name }}</td>
+                    <td style="padding: 10px; border: 1px solid black;">{{ permission.description }}</td>
+                    <td style="padding: 10px; border: 1px solid black;">{{ permission.module_system.name }}</td>
+                    <td style="padding: 10px; border: 1px solid black;">{{ permission.module_system.system.name }}</td>
+                    <td style="padding: 10px; border: 1px solid black;">
+                        <a href="{% url 'permission_module_system_update' permission.id %}">Edit</a>
+                        <a href="{% url 'permission_module_system_delete' permission.id %}">Delete</a>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
