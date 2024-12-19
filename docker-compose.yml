@@ -43,6 +43,19 @@ services:
           cpus: '0.25'
           memory: 256m
 
+  postgresdb_main_load_data:
+    image: postgres:16.0
+    container_name: postgresdb_main_load_data
+    volumes:
+      - postgresdb_data:/var/lib/postgresql/data
+      - ./postgres_db/init:/docker-entrypoint-initdb.d
+    env_file:
+      - ./postgres_db/.env
+    ports:
+      - "5412:5432"
+    networks:
+      - net_main_load_data
+
   ms_main_load_data:
     build:
       context: ./app
@@ -92,6 +105,7 @@ services:
 
 volumes:
   mongodb_data:
+  postgresdb_data:
   redis_data:
 
 networks:

@@ -1,9 +1,9 @@
-<!-- templates/sistema_confirm_delete.html -->
+<!-- templates/loginuser_confirm_delete.html -->
 
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Delete System</title>
+    <title>Delete User</title>
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
@@ -32,13 +32,13 @@
 <body>
     {% include 'partials/nav.html' %}
     <div class="container mt-5">
-        <h2 class="confirm-title">Delete System</h2>
-        <p>Are you sure to delete System: "<strong>{{ system.name }}</strong>"?</p>
+        <h2 class="confirm-title">Delete User</h2>
+        <p>Are you sure you want to delete user: "<strong>{{ user.username }}</strong>"?</p>
         <form method="post">
             {% csrf_token %}
             <div class="btn-group">
                 <button type="submit" class="btn btn-danger">Confirm Deletion</button>
-                <a href="{% url 'system_list' %}" class="btn btn-secondary">Cancel</a>
+                <a href="{% url 'loginuser_list' %}" class="btn btn-secondary">Cancel</a>
             </div>
         </form>
     </div>

@@ -1,17 +1,296 @@
 <!-- templates/asignar_permisos.html -->
 
+{% load form_tags %}
 <!DOCTYPE html>
 <html>
 <head>
     <title>Asign Permissions to Users</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding-top: 50px;
+        }
+        .container {
+            max-width: 1200px;
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .form-section, .table-section {
+            padding: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+        .table-actions a {
+            margin-right: 5px;
+        }
+        .table-sticky-header {
+            max-height: 400px; /* Ajusta según tus necesidades */
+            overflow-y: auto;
+        }
+        .table-sticky-header thead th {
+            position: sticky;
+            top: 0;
+            background-color: #343a40; /* Color de fondo del encabezado */
+            color: white; /* Color del texto en el encabezado */
+            z-index: 2; /* Asegura que el encabezado esté por encima del contenido */
+        }
+    </style>
 </head>
 <body>
-    <h1>Asign Permissions to Users</h1>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">Asign Permissions</button>
-    </form>
-    <a href="{% url 'main_manage_auth' %}">Back to main</a>
+    {% include 'partials/nav.html' %}
+    <div class="container mt-5">
+        <h2 class="mb-4 text-center">Asign Permissions to Users</h2>
+        <div class="row">
+            <div class="col-md-6 form-section">
+                <form id="permissions_form">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="{{ form.user.id_for_label }}" class="form-label">User:</label>
+                        {{ form.user|add_class:"form-select" }}
+                    </div>
+                    <div class="mb-3 hidden" id="system_div">
+                        <label for="{{ form.system.id_for_label }}" class="form-label">System:</label>
+                        {{ form.system|add_class:"form-select" }}
+                    </div>
+                    <div class="mb-3 hidden" id="module_div">
+                        <label for="{{ form.module.id_for_label }}" class="form-label">Module:</label>
+                        {{ form.module|add_class:"form-select" }}
+                    </div>
+                    <div class="mb-3 hidden" id="permissions_div">
+                        <label for="{{ form.permissions.id_for_label }}" class="form-label">Permissions:</label>
+                        <div class="form-check mb-2">
+                            <input type="checkbox" class="form-check-input" id="select_all">
+                            <label class="form-check-label" for="select_all">Select All</label>
+                        </div>
+                        <div id="permissions_container" class="mt-2">
+                            {{ form.permissions }}
+                        </div>
+                        <button type="button" id="assign_permissions" class="btn btn-primary mt-3">Add Permissions</button>
+                    </div>
+                    <a href="{% url 'main_manage_auth' %}" class="btn btn-secondary mt-3">Back to Main</a>
+                </form>
+            </div>
+            <div class="col-md-6 table-section hidden" id="permissions_table_section">
+                <h4>Current Permissions</h4>
+                <div class="table-sticky-header">
+                    <table class="table table-bordered table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Permission</th>
+                                <th>Module</th>
+                                <th>System</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="permissions_table_body">
+                            <!-- Existing permissions will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+                <button type="button" id="refresh_permissions" class="btn btn-info">Refresh Permissions</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="text/javascript">
+        $(document).ready(function(){
+            // Hide all sections initially
+            $('#system_div').hide();
+            $('#module_div').hide();
+            $('#permissions_div').hide();
+            $('#permissions_table_section').hide();
+
+            // Handle User selection
+            $('#id_user').change(function(){
+                var userId = $(this).val();
+                if(userId){
+                    $('#system_div').show();
+                    $('#module_div').hide();
+                    $('#permissions_div').hide();
+                    $('#id_system').val('');
+                    $('#id_module').html('<option value="">-Select a Module-</option>');
+                    $('#permissions_container').html('');
+                    $('#select_all').prop('checked', false);
+                    //$('#permissions_table_section').hide();
+                    loadUserPermissions(userId);
+                } else {
+                    $('#system_div').hide();
+                    $('#module_div').hide();
+                    $('#permissions_div').hide();
+                    $('#permissions_table_section').hide();
+                }
+            });
+
+            // Handle System selection
+            $('#id_system').change(function(){
+                var systemId = $(this).val();
+                if(systemId){
+                    $.ajax({
+                        url: "{% url 'ajax_load_modules' %}",
+                        data: {
+                            'system_id': systemId
+                        },
+                        success: function(data){
+                            $("#id_module").html('<option value="">-Select a Module-</option>');
+                            $.each(data.modules, function(index, module){
+                                $("#id_module").append('<option value="' + module.id + '">' + module.name + '</option>');
+                            });
+                            $("#module_div").show();
+                            $("#permissions_div").hide();
+                            $('#permissions_container').html('');
+                            $('#select_all').prop('checked', false);
+                        },
+                        error: function(){
+                            alert("Error loading modules.");
+                        }
+                    });
+                } else {
+                    $("#module_div").hide();
+                    $("#permissions_div").hide();
+                    $("#id_module").html('<option value="">-Select a Module-</option>');
+                    $("#permissions_container").html('');
+                    $('#select_all').prop('checked', false);
+                }
+            });
+
+            // Handle Module selection
+            $('#id_module').change(function(){
+                var moduleId = $(this).val();
+                if(moduleId){
+                    $.ajax({
+                        url: "{% url 'ajax_load_permissions' %}",
+                        data: {
+                            'module_id': moduleId
+                        },
+                        success: function(data){
+                            $("#permissions_container").html("");
+                            $.each(data.permissions, function(index, permission){
+                                $("#permissions_container").append(
+                                    '<div class="form-check">' +
+                                        '<input class="form-check-input permission-checkbox" type="checkbox" name="permissions" value="' + permission.id + '" id="perm_' + permission.id + '">' +
+                                        '<label class="form-check-label" for="perm_' + permission.id + '">' + permission.name + '</label>' +
+                                    '</div>'
+                                );
+                            });
+                            $("#permissions_div").show();
+                            $('#select_all').prop('checked', false);
+                        },
+                        error: function(){
+                            alert("Error loading permissions.");
+                        }
+                    });
+                } else {
+                    $("#permissions_div").hide();
+                    $("#permissions_container").html('');
+                    $('#select_all').prop('checked', false);
+                }
+            });
+
+            // Select All permissions
+            $('#select_all').click(function(){
+                $('.permission-checkbox').prop('checked', this.checked);
+            });
+
+            // Assign Permissions button click
+            $('#assign_permissions').click(function(){
+                var userId = $('#id_user').val();
+                var systemId = $('#id_system').val();
+                var moduleId = $('#id_module').val();
+                var selectedPermissions = [];
+                $('.permission-checkbox:checked').each(function(){
+                    selectedPermissions.push($(this).val());
+                });
+
+                if(!userId || !systemId || !moduleId || selectedPermissions.length === 0){
+                    alert("Please select user, system, module and at least one permission.");
+                    return;
+                }
+
+                $.ajax({
+                    url: "{% url 'ajax_assign_permissions' %}",
+                    type: "POST",
+                    data: {
+                        'user_id': userId,
+                        'permissions': selectedPermissions,
+                        'csrfmiddlewaretoken': '{{ csrf_token }}'
+                    },
+                    traditional: true,
+                    success: function(data){
+                        if(data.status === 'success'){
+                            loadUserPermissions(userId);
+                            alert("Permissions assigned successfully.");
+                        } else if(data.status === 'no_changes'){
+                            alert("No new permissions were added.");
+                        } else {
+                            alert("Error assigning permissions.");
+                        }
+                    },
+                    error: function(){
+                        alert("Error assigning permissions.");
+                    }
+                });
+            });
+
+            // Refresh Permissions button click
+            $('#refresh_permissions').click(function(){
+                var userId = $('#id_user').val();
+                if(userId){
+                    loadUserPermissions(userId);
+                }
+            });
+
+            // Function to load user permissions and display in table
+            function loadUserPermissions(userId){
+                $.ajax({
+                    url: "{% url 'ajax_load_user_permissions' %}",
+                    data: {
+                        'user_id': userId
+                    },
+                    success: function(data){
+                        $("#permissions_table_body").html("");
+                        if(data.permissions.length > 0){
+                            $.each(data.permissions, function(index, permission){
+                                $("#permissions_table_body").append(
+                                    '<tr>' +
+                                        '<td>' + permission.name + '</td>' +
+                                        '<td>' + permission.module + '</td>' +
+                                        '<td>' + permission.system + '</td>' +
+                                        '<td>' +
+                                            '<a href="' + permission.delete_url + '" class="btn btn-danger btn-sm">Delete</a>' +
+                                        '</td>' +
+                                    '</tr>'
+                                );
+                            });
+                            $("#permissions_table_section").show();
+                        } else {
+                            $("#permissions_table_body").append(
+                                '<tr><td colspan="4" class="text-center">No permissions assigned.</td></tr>'
+                            );
+                            $("#permissions_table_section").show();
+                        }
+                    },
+                    error: function(){
+                        alert("Error loading user permissions.");
+                    }
+                });
+            }
+
+            // Automatically load permissions if user is already selected on page load
+            var initialUserId = $('#id_user').val();
+            if(initialUserId){
+                loadUserPermissions(initialUserId);
+                $('#permissions_table_section').show();
+            }
+        });
+    </script>
 </body>
 </html>

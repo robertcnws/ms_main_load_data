@@ -11,8 +11,12 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+from dotenv import load_dotenv
 import os
 import mongoengine
+
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -88,7 +92,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django.contrib.admin',
+    # 'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'rest_framework',
@@ -104,13 +108,16 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # 'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'ms_app_manage_auth.middleware.MongoAuthMiddleware',
 ]
 
-AUTHENTICATION_BACKENDS = (
-    'ms_app_manage_auth.backends.MongoEngineBackend',
-    'django.contrib.auth.backends.ModelBackend',
-)
+AUTHENTICATION_BACKENDS = [
+    'ms_app_manage_auth.backends.MongoDBBackend',
+    # 'django.contrib.auth.backends.ModelBackend',
+]
+
+# AUTH_USER_MODEL = 'ms_app_manage_auth.CustomUser'
 
 SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
 
@@ -139,8 +146,12 @@ WSGI_APPLICATION = 'ms_main_load_data.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': f'{os.getenv('POSTGRES_DB_ENGINE', 'django.db.backends.postgresql')}',
+        'NAME': f'{os.getenv('POSTGRES_DB_NAME', '')}',
+        'USER': f'{os.getenv('POSRGRES_DB_USER', '')}',
+        'PASSWORD': f'{os.getenv('POSTGRES_DB_PASSWORD', '')}',
+        'HOST': f'{os.getenv('POSTGRES_DB_HOST', '')}',
+        'PORT': f'{os.getenv('POSTGRES_DB_PORT', '')}',
     }
 }
 
@@ -198,6 +209,7 @@ MONGO_PORT = int(os.getenv('MONGO_PORT', 27017))
 MONGO_USER = os.getenv('MONGO_USER', 'root')
 MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', '')
 MONGO_DB = os.getenv('MONGO_DB', '')
+MONGO_URI = os.getenv('MONGO_URI', '')
 
 mongoengine.connect(
     db=MONGO_DB,

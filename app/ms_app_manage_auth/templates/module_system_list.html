@@ -4,33 +4,59 @@
 <html>
 <head>
     <title>Modules Systems List</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding-top: 50px;
+        }
+        .container {
+            max-width: 900px;
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        }
+        .table-links a {
+            margin-right: 5px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Modules Systems</h1>
-    <a href="{% url 'module_system_create' %}">Create New Module System</a>
-    <a href="{% url 'main_manage_auth' %}">Back to main</a>
-    <table style="padding: 10px; border: 1px solid black;">
-        <thead>
-            <tr>
-                <th style="padding: 10px; border: 1px solid black;">Name</th>
-                <th style="padding: 10px; border: 1px solid black;">Description</th>
-                <th style="padding: 10px; border: 1px solid black;">System</th>
-                <th style="padding: 10px; border: 1px solid black;">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for module in modules %}
+    {% include 'partials/nav.html' %}
+    <div class="container mt-5">
+        <h2 class="mb-4 text-center">Modules Systems</h2>
+        <div class="mb-3">
+            <a href="{% url 'module_system_create' %}" class="btn btn-success">Create New Module System</a>
+            <a href="{% url 'main_manage_auth' %}" class="btn btn-secondary">Back to Main</a>
+        </div>
+        <table class="table table-bordered table-striped table-hover">
+            <thead class="table-dark">
                 <tr>
-                    <td style="padding: 10px; border: 1px solid black;">{{ module.name }}</td>
-                    <td style="padding: 10px; border: 1px solid black;">{{ module.description }}</td>
-                    <td style="padding: 10px; border: 1px solid black;">{{ module.system.name }}</td>
-                    <td style="padding: 10px; border: 1px solid black;">
-                        <a href="{% url 'module_system_update' module.id %}">Edit</a>
-                        <a href="{% url 'module_system_delete' module.id %}">Delete</a>
-                    </td>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>System</th>
+                    <th>Actions</th>
                 </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                {% for module in modules %}
+                    <tr>
+                        <td>{{ module.name }}</td>
+                        <td>{{ module.description }}</td>
+                        <td>{{ module.system.name }}</td>
+                        <td class="table-links">
+                            <a href="{% url 'module_system_update' module.id %}" class="btn btn-primary btn-sm">Edit</a>
+                            <a href="{% url 'module_system_delete' module.id %}" class="btn btn-danger btn-sm">Delete</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

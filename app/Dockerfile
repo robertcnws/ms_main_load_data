@@ -16,6 +16,10 @@ RUN pip install -r requirements.txt
 # Instalar herramientas necesarias incluyendo cron
 RUN apt-get update && apt-get install -y wget gnupg2 lsb-release
 
+# Agregar repositorio de PostgreSQL
+RUN wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+RUN echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list
+
 # Actualizar e instalar dependencias
 RUN apt-get update
 
@@ -26,7 +30,8 @@ COPY . /app/
 EXPOSE 8000
 
 # Ejecuta el script de inicialización y luego arranca Gunicorn y celery
-CMD ["sh", "-c", "python manage.py migrate && \
+CMD ["sh", "-c", "python manage.py makemigrations && \
+                  python manage.py migrate && \
                   python manage.py collectstatic --no-input && \
                   python init_scripts.py && \
                   celery -A ms_main_load_data worker --loglevel=info -E & \

@@ -1,17 +1,56 @@
-<!-- templates/sistema_form.html -->
-
+{% load form_tags %}
 <!DOCTYPE html>
 <html>
 <head>
     <title>{% if module %}Edit Module System{% else %}Create Module System{% endif %}</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding-top: 50px;
+        }
+        .container {
+            max-width: 600px;
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .form-title {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .btn-group {
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
 </head>
 <body>
-    <h1>{% if module %}Edit Module System{% else %}Create Module System{% endif %}</h1>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit">{% if module %}Update{% else %}Create{% endif %}</button>
-    </form>
-    <a href="{% url 'module_system_list' %}">Back to list</a>
+    {% include 'partials/nav.html' %}
+    <div class="container mt-5">
+        <h2 class="form-title">{% if module %}Edit Module System{% else %}Create Module System{% endif %}</h2>
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="{{ form.name.id_for_label }}" class="form-label">Name:</label>
+                {{ form.name|add_class:"form-control" }}
+            </div>
+            <div class="mb-3">
+                <label for="{{ form.description.id_for_label }}" class="form-label">Description:</label>
+                {{ form.description|add_class:"form-control" }}
+            </div>
+            <div class="mb-3">
+                <label for="{{ form.system.id_for_label }}" class="form-label">System:</label>
+                {{ form.system|add_class:"form-select" }}
+            </div>
+            <button type="submit" class="btn btn-primary">{% if module %}Update{% else %}Create{% endif %}</button>
+            <a href="{% url 'module_system_list' %}" class="btn btn-secondary">Back to list</a>
+        </form>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
