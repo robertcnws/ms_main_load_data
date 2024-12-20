@@ -78,10 +78,11 @@ class LoginUser(Document):
     password = StringField(required=True)
     last_login = DateTimeField(default=mongoengine.fields.DateTimeField().default)
     permissions = ListField(ReferenceField(PermissionModuleSystem), default=[])
+    token = StringField(max_length=255, required=False)
 
     meta = {
         'collection': 'login_users',
-        'indexes': ['username', 'email'],
+        'indexes': ['username', 'email', 'token'],
     }
 
     def set_password(self, raw_password):

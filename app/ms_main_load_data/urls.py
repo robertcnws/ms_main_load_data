@@ -22,5 +22,6 @@ import ms_app_manage_auth.views as ms_app_manage_auth
 urlpatterns = [
     path('api/zoho/', include('ms_load_from_zoho.urls')),
     path('api/manage/', include('ms_app_manage_auth.urls')),
+    path('api/consume/', include('ms_consume_loaded_zoho.urls')),
     path('api/', ms_app_manage_auth.MainManageAuthView.as_view(), name='main_manage_auth'),
 ]

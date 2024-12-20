@@ -3,10 +3,12 @@ import os
 import django
 from datetime import datetime
 from ms_app_manage_auth.models import LoginUser
+# from ms_main_load_data.mongo_setup import connect_mongo
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'ms_main_load_data.settings')
 django.setup()
 
+# connect_mongo()
 
 def create_superuser():
     username = os.getenv('DJANGO_SUPERUSER_USERNAME')

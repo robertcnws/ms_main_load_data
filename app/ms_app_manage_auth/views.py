@@ -25,6 +25,7 @@ from .forms import (
                         LoginForm
                     )
 from datetime import datetime
+import uuid
 
 # MAIN VIEW
 
@@ -439,7 +440,8 @@ class LoginUserCreateView(View):
                 zip_code=data.get('zip_code', ''),
                 gender=data.get('gender', ''),
                 date_joined=datetime.now(),
-                date_updated=datetime.now()
+                date_updated=datetime.now(),
+                token=generate_token(),
             )
             user.set_password(data['password'])
             user.save()
@@ -513,6 +515,8 @@ class LoginUserUpdateView(View):
             user.date_updated = datetime.now()
             if data['password']:
                 user.set_password(data['password'])
+            if not user.token:
+                user.token = generate_token()
             user.save()
             messages.success(request, "User updated successfully.")
             return redirect('loginuser_list')
@@ -537,3 +541,7 @@ class LoginUserDeleteView(View):
         user.delete()
         messages.success(request, "User deleted successfully.")
         return redirect('loginuser_list')
+    
+
+def generate_token():
+        return str(uuid.uuid4())

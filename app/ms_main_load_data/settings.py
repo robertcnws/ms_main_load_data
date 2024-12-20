@@ -12,11 +12,22 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 from dotenv import load_dotenv
+from celery.schedules import crontab
+from .mongo_setup import connect_mongo
 import os
+import environ
 import mongoengine
+import warnings 
 
 
-load_dotenv()
+
+DEBUG = True
+
+env = environ.Env(
+    DEBUG=(bool, False)
+)
+
+environ.Env.read_env()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -29,7 +40,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-1hh=deea+j$skklj#g%n)f0f3l=)%no&9qv+&r9j-p+%1o8$tu'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+
 
 ALLOWED_HOSTS = [
     'localhost', 
@@ -97,8 +108,9 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'rest_framework',
     'rest_framework_mongoengine',
-    'ms_load_from_zoho',
     'ms_app_manage_auth',
+    'ms_load_from_zoho',
+    'ms_load_sequence_tasks',
 ]
 
 MIDDLEWARE = [
@@ -110,6 +122,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # 'django.contrib.auth.middleware.AuthenticationMiddleware',
     'ms_app_manage_auth.middleware.MongoAuthMiddleware',
+    'ms_app_manage_auth.middleware.MongoConnectionMiddleware',
 ]
 
 AUTHENTICATION_BACKENDS = [
@@ -146,12 +159,12 @@ WSGI_APPLICATION = 'ms_main_load_data.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': f'{os.getenv('POSTGRES_DB_ENGINE', 'django.db.backends.postgresql')}',
-        'NAME': f'{os.getenv('POSTGRES_DB_NAME', '')}',
-        'USER': f'{os.getenv('POSRGRES_DB_USER', '')}',
-        'PASSWORD': f'{os.getenv('POSTGRES_DB_PASSWORD', '')}',
-        'HOST': f'{os.getenv('POSTGRES_DB_HOST', '')}',
-        'PORT': f'{os.getenv('POSTGRES_DB_PORT', '')}',
+        'ENGINE': f'{env('POSTGRES_DB_ENGINE', default="django.db.backends.postgresql_psycopg2")}',
+        'NAME': f'{env('POSTGRES_DB_NAME', default="")}',
+        'USER': f'{env('POSRGRES_DB_USER', default="")}',
+        'PASSWORD': f'{env('POSTGRES_DB_PASSWORD', default="")}',
+        'HOST': f'{env('POSTGRES_DB_HOST', default="")}',
+        'PORT': f'{env('POSTGRES_DB_PORT', default="")}',
     }
 }
 
@@ -173,6 +186,14 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
+
+# REST FRAMEWORK
+
+# REST_FRAMEWORK = {
+#     'DEFAULT_AUTHENTICATION_CLASSES': [
+#         'ms_app_manage_auth.authentication.MongoTokenAuthentication',  
+#     ],
+# }
 
 
 # Internationalization
@@ -204,21 +225,9 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-MONGO_HOST = os.getenv('MONGO_HOST', '')
-MONGO_PORT = int(os.getenv('MONGO_PORT', 27017))
-MONGO_USER = os.getenv('MONGO_USER', 'root')
-MONGO_PASSWORD = os.getenv('MONGO_PASSWORD', '')
-MONGO_DB = os.getenv('MONGO_DB', '')
-MONGO_URI = os.getenv('MONGO_URI', '')
+# REST FRAMEWORK
 
-mongoengine.connect(
-    db=MONGO_DB,
-    host=MONGO_HOST,
-    port=MONGO_PORT,
-    username=MONGO_USER,
-    password=MONGO_PASSWORD,
-    authentication_source='admin'
-)
+FRONTEND_URL = env('FRONTEND_URL', default='https://127.0.0.1/')
 
 # Celery
 
@@ -235,31 +244,43 @@ CELERY_ENABLE_UTC = False
 
 # CELERY_BEAT_SCHEDULE = {
 #     # Lunes a Sábado
-#     'run-task-sequence-every-2-min-mon-sat': {
-#         'task': 'api_project_zoho_senitron_async_sequence.tasks.task_sequence_2_min',
+#     'run-task-sequence-every-30-min-mon-sat': {
+#         'task': 'ms_load_sequence_tasks.tasks.task_sequence_30_min',
 #         'schedule': crontab(minute='*/2', hour='7-17', day_of_week='mon-sat'),
-#     },
-#     'run-task-sequence-every-45-min-mon-sat': {
-#         'task': 'api_project_zoho_senitron_async_sequence.tasks.task_sequence_45_min',
-#         'schedule': crontab(minute='*/45', hour='7-17', day_of_week='mon-sat'),
 #     },
 
 #     # Domingo
-#     'run-task-sequence-every-2-hours-sun': {
-#         'task': 'api_project_zoho_senitron_async_sequence.tasks.task_sequence_2_min',
+#     'run-task-sequence-every-2-hours-sun-30-min': {
+#         'task': 'ms_load_sequence_tasks.tasks.task_sequence_30_min',
 #         'schedule': crontab(minute=0, hour='*/2', day_of_week='sun'),
 #     },
-#     'run-task-sequence-every-2-hours-sun-45-min': {
-#         'task': 'api_project_zoho_senitron_async_sequence.tasks.task_sequence_45_min',
-#         'schedule': crontab(minute=0, hour='*/2', day_of_week='sun'),
-#     },
-#     # General Tasks
-#     'call-task-remove-old-senitron-items-assets-logs-every-day-8am': {
-#         'task': 'api_senitron.tasks.task_remove_old_senitron_items_assets_logs',
-#         'schedule': crontab(hour=8, minute=0),
-#     },
-#     'call-task-remove-old-notifications-every-day-8am': {
-#         'task': 'api_senitron.tasks.task_remove_old_notifications',
-#         'schedule': crontab(hour=8, minute=30),
-#     },
+    
 # }
+
+# MONGOENGINE
+
+warnings.filterwarnings("ignore", message="MongoClient opened before fork")
+
+MONGO_HOST = env('MONGO_HOST', default='localhost')
+MONGO_PORT = int(env('MONGO_PORT', default=27017))
+MONGO_USER = env('MONGO_USER', default='root')
+MONGO_PASSWORD = env('MONGO_PASSWORD', default='')
+MONGO_DB = env('MONGO_DB', default='')
+MONGO_URI = env('MONGO_URI', default='')
+
+connect_mongo()
+
+# ZOHO
+
+ZOHO_SCOPES = env.list('ZOHO_SCOPES', default=[])
+ZOHO_TOKEN_URL = env('ZOHO_TOKEN_URL', default='')
+ZOHO_AUTH_URL = env('ZOHO_AUTH_URL', default='')
+ZOHO_INVENTORY_ITEMS_URL = env('ZOHO_INVENTORY_ITEMS_URL', default='')
+ZOHO_INVENTORY_SHIPMENTORDERS_URL = env('ZOHO_INVENTORY_SHIPMENTORDERS_URL', default='')
+ZOHO_INVENTORY_PURCHASERECEIVES_URL = env('ZOHO_INVENTORY_PURCHASERECEIVES_URL', default='')
+ZOHO_INVENTORY_SALESORDERS_URL = env('ZOHO_INVENTORY_SALESORDERS_URL', default='')
+ZOHO_INVENTORY_SHIPMENTS_URL = env('ZOHO_INVENTORY_SHIPMENTS_URL', default='')
+ZOHO_INVENTORY_PACKAGES_URL = env('ZOHO_INVENTORY_PACKAGES_URL', default='')
+ZOHO_BOOKS_INVOICES_URL = env('ZOHO_BOOKS_INVOICES_URL', default='')
+ZOHO_BOOKS_CUSTOMERS_URL = env('ZOHO_BOOKS_CUSTOMERS_URL', default='')
+ZOHO_BOOKS_ITEMS_URL = env('ZOHO_BOOKS_ITEMS_URL', default='')
