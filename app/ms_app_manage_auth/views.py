@@ -27,6 +27,12 @@ from .forms import (
 from datetime import datetime
 import uuid
 
+# HEALTH CHECK VIEW
+
+@csrf_exempt
+def health_check(request):
+    return JsonResponse({'status': 'ok'})
+
 # MAIN VIEW
 
 class MainManageAuthView(LoginRequiredMixin, View):

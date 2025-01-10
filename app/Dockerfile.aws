@@ -1,8 +1,13 @@
-# ./django/Dockerfile
+# ./django/Dockerfile.aws
 FROM python:3.12
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
+
+ENV TZ=America/New_York
+
+RUN ln -fs /usr/share/zoneinfo/$TZ /etc/localtime && \
+    dpkg-reconfigure -f noninteractive tzdata
 
 WORKDIR /app
 
@@ -29,16 +34,9 @@ COPY . /app/
 # Expose port 8000 for the Django application
 EXPOSE 8000
 
-# Ejecuta el script de inicialización y luego arranca Gunicorn y celery
-# CMD ["sh", "-c", "python manage.py makemigrations && \
-#                   python manage.py migrate && \
-#                   python manage.py collectstatic --no-input && \
-#                   python init_scripts.py && \
-#                   celery -A ms_main_load_data worker --loglevel=info -E & \
-#                   celery -A ms_main_load_data beat --loglevel=info & \
-#                   gunicorn ms_main_load_data.asgi:application -w 3 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"]
-
-CMD ["sh", "-c", "python manage.py collectstatic --no-input && \
+CMD ["sh", "-c", "python manage.py makemigrations && \
+                  python manage.py migrate && \
+                  python manage.py collectstatic --no-input && \
                   python init_scripts.py && \
                   celery -A ms_main_load_data worker --loglevel=info -E & \
                   celery -A ms_main_load_data beat --loglevel=info & \

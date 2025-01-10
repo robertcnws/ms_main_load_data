@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AnonymousUser
 from django.utils.deprecation import MiddlewareMixin
-from ms_main_load_data.mongo_setup import connect_mongo
+from django.conf import settings
+from ms_main_load_data.mongo_setup import connect_mongo_dev, connect_mongo_prod
 from .models import LoginUser
 import mongoengine
 
@@ -28,4 +29,8 @@ class MongoAuthMiddleware:
 class MongoConnectionMiddleware(MiddlewareMixin):
     def process_request(self, request):
         if not mongoengine.connection.get_connection():
-            connect_mongo()
+            enviroment = settings.ENVIRONMENT
+            if enviroment == 'DEV':
+                connect_mongo_dev()
+            else:
+                connect_mongo_prod()

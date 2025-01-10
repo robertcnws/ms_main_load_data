@@ -7,6 +7,8 @@ from .views import (
                     load_inventory_sales_orders,
                     load_inventory_shipments,
                     load_books_customers,
+                    load_books_customers_details,
+                    load_books_invoices,
                    )
 import json
     
@@ -25,7 +27,8 @@ def task_load_books_customers():
     request.content_type = 'application/json'
     request._body = json.dumps({}).encode('utf-8')
     load_books_customers(request)
-    
+
+
 @shared_task
 def task_load_inventory_sales_orders():
     start_date = datetime.now().strftime("%Y-%m-%d")
@@ -45,4 +48,19 @@ def task_load_inventory_shipments():
     request.content_type = 'application/json'
     request._body = json.dumps(data).encode('utf-8')
     load_inventory_shipments(request)
+    
+    
+@shared_task
+def task_load_books_invoices():
+    start_date = datetime.now().strftime("%Y-%m-%d")
+    data = {'start_date': start_date}
+    request = HttpRequest()
+    request.method = 'POST'
+    request.content_type = 'application/json'
+    request._body = json.dumps(data).encode('utf-8')
+    load_books_invoices(request)
+    
+# @shared_task
+# def task_load_books_customers_details():
+#     load_books_customers_details()
     

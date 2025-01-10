@@ -5,7 +5,7 @@ services:
     container_name: mongodb_main_load_data
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "27027:27017"
     env_file:
       - ./mongo_db/.env
     volumes:

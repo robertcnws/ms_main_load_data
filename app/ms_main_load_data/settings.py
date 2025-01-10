@@ -13,15 +13,20 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 from dotenv import load_dotenv
 from celery.schedules import crontab
-from .mongo_setup import connect_mongo
+from .mongo_setup import (
+    connect_mongo_dev,
+    connect_mongo_prod
+)
 import os
 import environ
+import json
 import mongoengine
 import warnings 
+import urllib.parse
 
 
 
-DEBUG = True
+# DEBUG = True
 
 env = environ.Env(
     DEBUG=(bool, False)
@@ -41,17 +46,62 @@ SECRET_KEY = 'django-insecure-1hh=deea+j$skklj#g%n)f0f3l=)%no&9qv+&r9j-p+%1o8$tu
 
 # SECURITY WARNING: don't run with debug turned on in production!
 
+# LOGGING
 
-ALLOWED_HOSTS = [
-    'localhost', 
-    '127.0.0.1',
-]
+# settings.py
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+        'file': {
+            'level': 'WARNING', 
+            'class': 'logging.FileHandler',
+            'filename': 'app.log',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'ms_main_load_data': {  
+            'handlers': ['console', 'file'],
+            'level': 'WARNING',  
+            'propagate': True,
+        },
+    },
+}
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://localhost',
-    'https://127.0.0.1',
-    'https://127.0.0.1:444',
-]
+
+ALLOWED_HOSTS = ['*']
+# ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
+# ENVIRONMENT = env('ENVIRONMENT', default='DEV')
+
+# if ENVIRONMENT == 'DEV':
+#     DEBUG = True
+#     ALLOWED_HOSTS = ['*']
+# else:
+#     DEBUG = False
+#     ALLOWED_HOST_REGEXES = [
+#         "regex:^172\\.31\\.\\d+\\.\\d+(:\\d+)?$",
+#         "regex:^10\\.0\\.\\d+\\.\\d+(:\\d+)?$"
+#     ]
+#     ALLOWED_HOSTS.extend(ALLOWED_HOST_REGEXES)
+    
+# print(f'ALLOWED_HOSTS: {ALLOWED_HOSTS}')
+
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 
 CSRF_COOKIE_SECURE = False  
 
@@ -67,11 +117,7 @@ SESSION_COOKIE_SECURE = False
 
 CORS_ALLOW_CREDENTIALS = True
 
-CORS_ALLOWED_ORIGINS = [
-    "https://localhost",
-    "https://127.0.0.1",
-    "https://127.0.0.1:444",
-]
+CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
 
 CORS_ALLOW_METHODS = [
     'GET',
@@ -110,6 +156,7 @@ INSTALLED_APPS = [
     'rest_framework_mongoengine',
     'ms_app_manage_auth',
     'ms_load_from_zoho',
+    'ms_load_from_senitron',
     'ms_load_sequence_tasks',
 ]
 
@@ -158,15 +205,22 @@ WSGI_APPLICATION = 'ms_main_load_data.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': f'{env('POSTGRES_DB_ENGINE', default="django.db.backends.postgresql_psycopg2")}',
-        'NAME': f'{env('POSTGRES_DB_NAME', default="")}',
-        'USER': f'{env('POSRGRES_DB_USER', default="")}',
-        'PASSWORD': f'{env('POSTGRES_DB_PASSWORD', default="")}',
-        'HOST': f'{env('POSTGRES_DB_HOST', default="")}',
-        'PORT': f'{env('POSTGRES_DB_PORT', default="")}',
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
     }
 }
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': f'{env('POSTGRES_DB_ENGINE', default="django.db.backends.postgresql_psycopg2")}',
+#         'NAME': f'{env('POSTGRES_DB_NAME', default="")}',
+#         'USER': f'{env('POSRGRES_DB_USER', default="")}',
+#         'PASSWORD': f'{env('POSTGRES_DB_PASSWORD', default="")}',
+#         'HOST': f'{env('POSTGRES_DB_HOST', default="")}',
+#         'PORT': f'{env('POSTGRES_DB_PORT', default="")}',
+#     }
+# }
 
 
 # Password validation
@@ -227,13 +281,14 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # REST FRAMEWORK
 
-FRONTEND_URL = env('FRONTEND_URL', default='https://127.0.0.1/')
+FRONTEND_URL = env('FRONTEND_URL', default='')
 
 # Celery
 
-CELERY_BROKER_URL = 'redis://redis_main_load_data:6379/0'
+CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='')
+CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default='')
+CELERY_TASKS_DELAY = env('CELERY_TASKS_DELAY', default=5)
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-CELERY_RESULT_BACKEND = 'redis://redis_main_load_data:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -242,20 +297,95 @@ CELERY_ENABLE_UTC = False
 
 # CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
-# CELERY_BEAT_SCHEDULE = {
-#     # Lunes a Sábado
-#     'run-task-sequence-every-30-min-mon-sat': {
-#         'task': 'ms_load_sequence_tasks.tasks.task_sequence_30_min',
-#         'schedule': crontab(minute='*/2', hour='7-17', day_of_week='mon-sat'),
-#     },
+# CELERY_BEAT
+DAY_OF_WEEK_MONDAY_TO_SATURDAY = env('DAY_OF_WEEK_MONDAY_TO_SATURDAY', default='mon-sat')
+DAY_OF_WEEK_SUNDAY = env('DAY_OF_WEEK_SUNDAY', default='sun')
 
-#     # Domingo
-#     'run-task-sequence-every-2-hours-sun-30-min': {
-#         'task': 'ms_load_sequence_tasks.tasks.task_sequence_30_min',
-#         'schedule': crontab(minute=0, hour='*/2', day_of_week='sun'),
-#     },
+# CELERY_BEAT SHIPMENTS, SALES ORDERS, INVOICES
+MINUTE_ZOHO_SALES_MONDAY_TO_SATURDAY = env('MINUTE_ZOHO_SALES_MONDAY_TO_SATURDAY', default='*/5')
+HOUR_ZOHO_SALES_MONDAY_TO_SATURDAY = env('HOUR_ZOHO_SALES_MONDAY_TO_SATURDAY', default='7-17')
+MINUTE_ZOHO_SALES_SUNDAY = env('MINUTE_ZOHO_SALES_SUNDAY', default=0)
+HOUR_ZOHO_SALES_SUNDAY = env('HOUR_ZOHO_SALES_SUNDAY', default='*/6')
+
+CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY = crontab(
+    minute=MINUTE_ZOHO_SALES_MONDAY_TO_SATURDAY, 
+    hour=HOUR_ZOHO_SALES_MONDAY_TO_SATURDAY, 
+    day_of_week=DAY_OF_WEEK_MONDAY_TO_SATURDAY
+)
+
+CRONTAB_ZOHO_SALES_SUNDAY = crontab(
+    minute=MINUTE_ZOHO_SALES_SUNDAY,
+    hour=HOUR_ZOHO_SALES_SUNDAY,
+    day_of_week=DAY_OF_WEEK_SUNDAY
+)
+
+# CUSTOMERS, ITEMS
+MINUTE_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY = env('MINUTE_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY', default='*/59')
+HOUR_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY = env('HOUR_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY', default='7-17')
+MINUTE_ZOHO_CUSTOMERS_ITEMS_SUNDAY = env('MINUTE_ZOHO_CUSTOMERS_ITEMS_SUNDAY', default=30)
+HOUR_ZOHO_CUSTOMERS_ITEMS_SUNDAY = env('HOUR_ZOHO_CUSTOMERS_ITEMS_SUNDAY', default='*/12')
+
+CRONTAB_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY = crontab(
+    minute=MINUTE_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY, 
+    hour=HOUR_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY, 
+    day_of_week=DAY_OF_WEEK_MONDAY_TO_SATURDAY
+)
+
+CRONTAB_ZOHO_CUSTOMERS_ITEMS_SUNDAY = crontab(
+    minute=MINUTE_ZOHO_CUSTOMERS_ITEMS_SUNDAY,
+    hour=HOUR_ZOHO_CUSTOMERS_ITEMS_SUNDAY,
+    day_of_week=DAY_OF_WEEK_SUNDAY
+)
+
+# SENITRON
+MINUTE_SENITRON_MONDAY_TO_SATURDAY = env('MINUTE_SENITRON_MONDAY_TO_SATURDAY', default='*/10')
+HOUR_SENITRON_MONDAY_TO_SATURDAY = env('HOUR_SENITRON_MONDAY_TO_SATURDAY', default='7-17')
+MINUTE_SENITRON_SUNDAY = env('MINUTE_SENITRON_SUNDAY', default=5)
+HOUR_SENITRON_SUNDAY = env('HOUR_SENITRON_SUNDAY', default='*/2')
+
+CRONTAB_SENITRON_MONDAY_TO_SATURDAY = crontab(
+    minute=MINUTE_SENITRON_MONDAY_TO_SATURDAY,
+    hour=HOUR_SENITRON_MONDAY_TO_SATURDAY,
+    day_of_week=DAY_OF_WEEK_MONDAY_TO_SATURDAY
+)
+
+CRONTAB_SENITRON_SUNDAY = crontab(
+    minute=MINUTE_SENITRON_SUNDAY,
+    hour=HOUR_SENITRON_SUNDAY,
+    day_of_week=DAY_OF_WEEK_SUNDAY
+)
+
+# SCHEDULES
+CELERY_BEAT_SCHEDULE = {
+    # MONDAY_TO_SATURDAY
+    'run-task-sequence-zoho-sales-monday-saturday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales',
+        'schedule': CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY,
+    },
+    'run-task-sequence-senitron-monday-saturday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
+        'schedule': CRONTAB_SENITRON_MONDAY_TO_SATURDAY,
+    },
+    'run-task-sequence-zoho-customers-items-monday-saturday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_customers_items',
+        'schedule': CRONTAB_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY,
+    },
+
+    # SUNDAY
+    'run-task-sequence-zoho-sales-sunday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales',
+        'schedule': CRONTAB_ZOHO_SALES_SUNDAY,
+    },
+    'run-task-sequence-senitron-sunday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
+        'schedule': CRONTAB_SENITRON_SUNDAY,
+    },
+    'run-task-sequence-zoho-customers-items-sunday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_customers_items',
+        'schedule': CRONTAB_ZOHO_CUSTOMERS_ITEMS_SUNDAY,
+    },
     
-# }
+}
 
 # MONGOENGINE
 
@@ -266,9 +396,16 @@ MONGO_PORT = int(env('MONGO_PORT', default=27017))
 MONGO_USER = env('MONGO_USER', default='root')
 MONGO_PASSWORD = env('MONGO_PASSWORD', default='')
 MONGO_DB = env('MONGO_DB', default='')
-MONGO_URI = env('MONGO_URI', default='')
+connect_mongo_dev()
+# MONGO_URI = env('MONGO_URI', default='') if ENVIRONMENT == 'DEV' else (
+#     f"mongodb://{urllib.parse.quote(MONGO_USER)}:{urllib.parse.quote(MONGO_PASSWORD)}"
+#     f"@{MONGO_HOST}:{MONGO_PORT}/{MONGO_DB}?ssl=true&retryWrites=false"
+# )
 
-connect_mongo()
+# if ENVIRONMENT == 'DEV':
+#     connect_mongo_dev()
+# else:
+#     connect_mongo_prod()
 
 # ZOHO
 
@@ -284,3 +421,9 @@ ZOHO_INVENTORY_PACKAGES_URL = env('ZOHO_INVENTORY_PACKAGES_URL', default='')
 ZOHO_BOOKS_INVOICES_URL = env('ZOHO_BOOKS_INVOICES_URL', default='')
 ZOHO_BOOKS_CUSTOMERS_URL = env('ZOHO_BOOKS_CUSTOMERS_URL', default='')
 ZOHO_BOOKS_ITEMS_URL = env('ZOHO_BOOKS_ITEMS_URL', default='')
+
+# SENITRON
+API_KEY_SENITRON = env('API_KEY_SENITRON', default='')
+API_SENITRON_QUANTITIES_URL = env('API_SENITRON_QUANTITIES_URL', default='')
+API_SENITRON_ASSETS_URL = env('API_SENITRON_ASSETS_URL', default='')
+API_SENITRON_ASSETS_LOGS_URL = env('API_SENITRON_ASSETS_LOGS_URL', default='')

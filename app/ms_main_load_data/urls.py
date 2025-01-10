@@ -22,6 +22,9 @@ import ms_app_manage_auth.views as ms_app_manage_auth
 urlpatterns = [
     path('api/zoho/', include('ms_load_from_zoho.urls')),
     path('api/manage/', include('ms_app_manage_auth.urls')),
-    path('api/consume/', include('ms_consume_loaded_zoho.urls')),
+    path('api/consume/zoho/', include('ms_consume_loaded_zoho.urls')),
+    path('api/consume/senitron/', include('ms_consume_loaded_senitron.urls')),
     path('api/', ms_app_manage_auth.MainManageAuthView.as_view(), name='main_manage_auth'),
+    path('health-check/', ms_app_manage_auth.health_check, name='health_check'),
+    path('', ms_app_manage_auth.MainManageAuthView.as_view(), name='main_manage_auth'),
 ]

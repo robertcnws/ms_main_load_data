@@ -1,13 +1,20 @@
 from datetime import datetime as dt
 from django.utils import timezone
 from mongoengine import DoesNotExist, ValidationError
+from decimal import Decimal
 from .models import (
                         ZohoInventoryItem,
                         ZohoInventoryShipmentSalesOrder,
                         ZohoShipmentOrder,
                         ZohoPackage,
                         ZohoCustomer,
+                        ZohoFullInvoice,
                     )  
+
+
+#############################################
+# CREATE INVENTORY ITEM INSTANCE
+#############################################
 
 def create_inventory_item_instance(logger, data):
     current_timezone = timezone.get_current_timezone()
@@ -76,6 +83,10 @@ def create_inventory_item_instance(logger, data):
     
 
 # ----------------------------------------------------------
+#############################################
+# CREATE INVENTORY SALES ORDER INSTANCE
+#############################################
+
 
 def create_inventory_sales_order_instance(logger, data):
     
@@ -176,6 +187,12 @@ def create_inventory_sales_order_instance(logger, data):
     )
     
     return sales_order
+
+
+# ----------------------------------------------------------
+#############################################
+# CREATE INVENTORY SHIPMENT INSTANCE
+#############################################
 
 
 def create_inventory_shipment_instance(logger, data):
@@ -384,6 +401,12 @@ def create_inventory_shipment_instance(logger, data):
     return shipment
 
 
+# ----------------------------------------------------------
+#############################################
+# CREATE INVENTORY PACKAGE INSTANCE
+#############################################
+
+
 def create_inventory_package_instance(logger, data, zoho_shipment=None):
     current_timezone = timezone.get_current_timezone()
     
@@ -534,6 +557,12 @@ def create_inventory_package_instance(logger, data, zoho_shipment=None):
     return package
 
 
+# ----------------------------------------------------------
+#############################################
+# CREATE BOOKS CUSTOMER INSTANCE
+#############################################
+
+
 def create_books_customers_instance(logger, data):
     current_timezone = timezone.get_current_timezone()
 
@@ -578,6 +607,45 @@ def create_books_customers_instance(logger, data):
     last_modified_time = data.get('last_modified_time', '')
     last_modified_time_formatted = data.get('last_modified_time_formatted', '')
     qb_list_id = data.get('qb_list_id', '')
+    contact_type = data.get('contact_type', '')
+    has_transaction = data.get('has_transaction', False)
+    is_linked_with_zohocrm = data.get('is_linked_with_zohocrm', False)
+    website = data.get('website', '')
+    primary_contact_id = data.get('primary_contact_id', '')
+    payment_terms = data.get('payment_terms', 0)
+    payment_terms_label = data.get('payment_terms_label', '')
+    currency_id = data.get('currency_id', '')
+    currency_code = data.get('currency_code', '')
+    currency_symbol = data.get('currency_symbol', '')
+    outstanding_receivable_amount = data.get('outstanding_receivable_amount', 0.0)
+    outstanding_receivable_amount_bcy = data.get('outstanding_receivable_amount_bcy', 0.0)
+    unused_credits_receivable_amount = data.get('unused_credits_receivable_amount', 0.0)
+    unused_credits_receivable_amount_bcy = data.get('unused_credits_receivable_amount_bcy', 0.0)
+    facebook = data.get('facebook', '')
+    twitter = data.get('twitter', '')
+    payment_remainder_enabled = data.get('payment_remainder_enabled', False)
+    notes = data.get('notes', '')
+    is_taxable = data.get('is_taxable', False)
+    tax_id = data.get('tax_id', '')
+    tax_name = data.get('tax_name', '')
+    tax_percentage = data.get('tax_percentage', 0.0)
+    tax_authority_id = data.get('tax_authority_id', '')
+    tax_exemption_id = data.get('tax_exemption_id', '')
+    tax_authority_name = data.get('tax_authority_name', '')
+    tax_exemption_code = data.get('tax_exemption_code', '')
+    place_of_contact = data.get('place_of_contact', '')
+    gst_no = data.get('gst_no', '')
+    tax_treatment = data.get('tax_treatment', '')
+    tax_regime = data.get('tax_regime', '')
+    legal_name = data.get('legal_name', '')
+    is_tds_applicable = data.get('is_tds_applicable', False)
+    vst_treatment = data.get('vst_treatment', '')
+    gst_treatment = data.get('gst_treatment', '')
+    custom_fields = data.get('custom_fields', [])
+    billing_address = data.get('billing_address', {})
+    shipping_address = data.get('shipping_address', {})
+    contact_persons = data.get('contact_persons', [])
+    default_templates = data.get('default_templates', {})
     
     customer = ZohoCustomer(
         contact_id=contact_id,
@@ -595,6 +663,141 @@ def create_books_customers_instance(logger, data):
         last_modified_time=last_modified_time,
         last_modified_time_formatted=last_modified_time_formatted,
         qb_list_id=qb_list_id,
+        contact_type=contact_type,
+        has_transaction=has_transaction,
+        is_linked_with_zohocrm=is_linked_with_zohocrm,
+        website=website,
+        primary_contact_id=primary_contact_id,
+        payment_terms=payment_terms,
+        payment_terms_label=payment_terms_label,
+        currency_id=currency_id,
+        currency_code=currency_code,
+        currency_symbol=currency_symbol,
+        outstanding_receivable_amount=outstanding_receivable_amount,
+        outstanding_receivable_amount_bcy=outstanding_receivable_amount_bcy,
+        unused_credits_receivable_amount=unused_credits_receivable_amount,
+        unused_credits_receivable_amount_bcy=unused_credits_receivable_amount_bcy,
+        facebook=facebook,
+        twitter=twitter,
+        payment_remainder_enabled=payment_remainder_enabled,
+        notes=notes,
+        is_taxable=is_taxable,
+        tax_id=tax_id,
+        tax_name=tax_name,
+        tax_percentage=tax_percentage,
+        tax_authority_id=tax_authority_id,
+        tax_exemption_id=tax_exemption_id,
+        tax_authority_name=tax_authority_name,
+        tax_exemption_code=tax_exemption_code,
+        place_of_contact=place_of_contact,
+        gst_no=gst_no,
+        tax_treatment=tax_treatment,
+        tax_regime=tax_regime,
+        legal_name=legal_name,
+        is_tds_applicable=is_tds_applicable,
+        vst_treatment=vst_treatment,
+        gst_treatment=gst_treatment,
+        custom_fields=custom_fields,
+        billing_address=billing_address,
+        shipping_address=shipping_address,
+        contact_persons=contact_persons,
+        default_templates=default_templates,
     )
     
     return customer
+
+
+# ----------------------------------------------------------
+#############################################
+# CREATE BOOKS INVOICE INSTANCE
+#############################################
+
+def create_books_invoice_instance(logger, data):
+    def parse_invoice_date(datetime_str):
+        if not datetime_str:
+            return None
+        try:                          
+            aware_datetime = dt.fromisoformat(datetime_str)
+            date = aware_datetime.date()
+            return date
+        except ValueError:
+            logger.error(f"Invalid datetime format: {datetime_str}")
+            return None
+
+    d = parse_invoice_date(data.get('date'))
+    dd = parse_invoice_date(data.get('due_date'))
+    ct = parse_invoice_date(data.get('created_time'))
+    lmt = parse_invoice_date(data.get('last_modified_time'))
+    lpd = parse_invoice_date(data.get('last_payment_date'))
+    cd = parse_invoice_date(data.get('created_date'))
+    lsd = parse_invoice_date(data.get('last_sync_date'))
+
+    invoice = ZohoFullInvoice(
+        invoice_id=data.get('invoice_id'),
+        invoice_number=data.get('invoice_number'),
+        date=d,
+        due_date=dd,
+        customer_id=data.get('customer_id'),
+        customer_name=data.get('customer_name'),
+        email=data.get('email'),
+        status=data.get('status'),
+        recurring_invoice_id=data.get('recurring_invoice_id'),
+        payment_terms=int(data.get('payment_terms', 0)) if data.get('payment_terms') else None,
+        payment_terms_label=data.get('payment_terms_label'),
+        payment_reminder_enabled=bool(data.get('payment_reminder_enabled', False)),
+        payment_discount=Decimal(str(data.get('payment_discount', 0.0))),
+        credits_applied=Decimal(str(data.get('credits_applied', 0.0))),
+        payment_made=Decimal(str(data.get('payment_made', 0.0))),
+        reference_number=data.get('reference_number'),
+        line_items=data.get('line_items', []),
+        allow_partial_payments=bool(data.get('allow_partial_payments', False)),
+        price_precision=int(data.get('price_precision', 2)) if data.get('price_precision') else None,
+        sub_total=Decimal(str(data.get('sub_total', 0.0))),
+        tax_total=Decimal(str(data.get('tax_total', 0.0))),
+        discount_total=Decimal(str(data.get('discount_total', 0.0))),
+        discount_percent=Decimal(str(data.get('discount_percent', 0.0))),
+        discount=Decimal(str(data.get('discount', 0.0))),
+        discount_applied_on_amount=Decimal(str(data.get('discount_applied_on_amount', 0.0))),
+        discount_type=data.get('discount_type'),
+        tax_override_preference=data.get('tax_override_preference'),
+        is_discount_before_tax=bool(data.get('is_discount_before_tax', True)),
+        adjustment=Decimal(str(data.get('adjustment', 0.0))),
+        adjustment_description=data.get('adjustment_description'),
+        total=Decimal(str(data.get('total', 0.0))),
+        balance=Decimal(str(data.get('balance', 0.0))),
+        is_inclusive_tax=bool(data.get('is_inclusive_tax', False)),
+        sub_total_inclusive_of_tax=Decimal(str(data.get('sub_total_inclusive_of_tax', 0.0))),
+        contact_category=data.get('contact_category'),
+        tax_rounding=data.get('tax_rounding'),
+        taxes=data.get('taxes', []),
+        tds_calculation_type=data.get('tds_calculation_type'),
+        last_payment_date=lpd,
+        contact_persons=data.get('contact_persons', []),
+        salesorder_id=data.get('salesorder_id'),
+        salesorder_number=data.get('salesorder_number'),
+        salesorders=data.get('salesorders', []),
+        contact_persons_details=data.get('contact_persons_details', []),
+        created_time=ct,
+        last_modified_time=lmt,
+        created_date=cd,
+        created_by_name=data.get('created_by_name'),
+        estimate_id=data.get('estimate_id'),
+        customer_default_billing_address=data.get('customer_default_billing_address', {}),
+        notes=data.get('notes'),
+        terms=data.get('terms'),
+        billing_address=data.get('billing_address', {}),
+        shipping_address=data.get('shipping_address', {}),
+        contact=data.get('contact', {}),
+        inserted_in_qb=bool(data.get('inserted_in_qb', False)),
+        items_unmatched=data.get('items_unmatched', []),
+        customer_unmatched=data.get('customer_unmatched', []),
+        force_to_sync=bool(data.get('force_to_sync', False)),
+        last_sync_date=lsd,
+        number_of_times_synced=int(data.get('number_of_times_synced', 0)),
+        all_items_matched=bool(data.get('all_items_matched', False)),
+        all_customer_matched=bool(data.get('all_customer_matched', False)),
+        qb_customer_list_id=data.get('qb_customer_list_id'),
+    )
+    
+    return invoice
+

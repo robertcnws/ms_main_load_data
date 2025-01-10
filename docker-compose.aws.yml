@@ -1,0 +1,62 @@
+services:
+  aws_ms_main_load_data:
+    build:
+      context: ./app
+      dockerfile: Dockerfile.aws
+    container_name: aws_ms_main_load_data
+    restart: unless-stopped
+    volumes:
+      - ./app:/app
+      - ./app/ms_main_load_data/gunicorn.conf.py:/etc/nginx/gunicorn.conf.py
+      - ./app/static:/app/staticfiles
+    ports:
+      - "8000:8000"
+    networks:
+      - net_main_load_data
+
+  aws_mongodb_main_load_data:
+    build:
+      context: ./mongo_db
+    container_name: aws_mongodb_main_load_data
+    restart: unless-stopped
+    ports:
+      - "27027:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo_db/init:/docker-entrypoint-initdb.d
+    networks:
+      - net_main_load_data
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4g
+        reservations:
+          cpus: '1.0'
+          memory: 2g
+
+  aws_mongoexpress_main_load_data:
+    build:
+      context: ./mongo_express
+      dockerfile: Dockerfile.aws
+    container_name: aws_mongoexpress_main_load_data
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    networks:
+      - net_main_load_data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512m
+        reservations:
+          cpus: '0.25'
+          memory: 256m
+
+volumes:
+  mongodb_data:
+
+networks:
+  net_main_load_data:
+    driver: bridge
