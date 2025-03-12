@@ -2,6 +2,7 @@ from celery import shared_task
 from datetime import datetime
 from django.http import HttpRequest
 from django.utils import timezone
+from .models import AppConfig
 from .views import (
                     load_inventory_items,
                     load_inventory_sales_orders,
@@ -18,7 +19,9 @@ def task_load_inventory_items():
     request.method = 'POST'
     request.content_type = 'application/json'
     request._body = json.dumps({}).encode('utf-8')
-    load_inventory_items(request)
+    apps = AppConfig.objects.all()
+    for app in apps:
+        load_inventory_items(request, app.zoho_org_id)
     
 @shared_task
 def task_load_books_customers():
@@ -26,7 +29,9 @@ def task_load_books_customers():
     request.method = 'POST'
     request.content_type = 'application/json'
     request._body = json.dumps({}).encode('utf-8')
-    load_books_customers(request)
+    apps = AppConfig.objects.all()
+    for app in apps:
+        load_books_customers(request, app.zoho_org_id)
 
 
 @shared_task
@@ -37,7 +42,9 @@ def task_load_inventory_sales_orders():
     request.method = 'POST'
     request.content_type = 'application/json'
     request._body = json.dumps(data).encode('utf-8')
-    load_inventory_sales_orders(request)
+    apps = AppConfig.objects.all()
+    for app in apps:
+        load_inventory_sales_orders(request, app.zoho_org_id)
     
 @shared_task
 def task_load_inventory_shipments():
@@ -47,7 +54,9 @@ def task_load_inventory_shipments():
     request.method = 'POST'
     request.content_type = 'application/json'
     request._body = json.dumps(data).encode('utf-8')
-    load_inventory_shipments(request)
+    apps = AppConfig.objects.all()
+    for app in apps:
+        load_inventory_shipments(request, app.zoho_org_id)
     
     
 @shared_task
@@ -58,7 +67,9 @@ def task_load_books_invoices():
     request.method = 'POST'
     request.content_type = 'application/json'
     request._body = json.dumps(data).encode('utf-8')
-    load_books_invoices(request)
+    apps = AppConfig.objects.all()
+    for app in apps:
+        load_books_invoices(request, app.zoho_org_id)
     
 # @shared_task
 # def task_load_books_customers_details():

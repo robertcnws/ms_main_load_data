@@ -11,18 +11,13 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
-from dotenv import load_dotenv
 from celery.schedules import crontab
 from .mongo_setup import (
-    connect_mongo_dev,
-    connect_mongo_prod
+    connect_mongo_dev
 )
 import os
 import environ
-import json
-import mongoengine
 import warnings 
-import urllib.parse
 
 
 
@@ -52,32 +47,28 @@ SECRET_KEY = 'django-insecure-1hh=deea+j$skklj#g%n)f0f3l=)%no&9qv+&r9j-p+%1o8$tu
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
-            'style': '{',
-        },
-        'simple': {
-            'format': '{levelname} {message}',
-            'style': '{',
-        },
-    },
     'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'simple',
-        },
         'file': {
-            'level': 'WARNING', 
+            'level': 'DEBUG',
             'class': 'logging.FileHandler',
-            'filename': 'app.log',
+            'filename': '/var/log/celery.log',
             'formatter': 'verbose',
         },
     },
+    'formatters': {
+        'verbose': {
+            'format': '%(asctime)s %(levelname)s %(message)s'
+        },
+    },
     'loggers': {
-        'ms_main_load_data': {  
-            'handlers': ['console', 'file'],
-            'level': 'WARNING',  
+        'django': {
+            'handlers': ['file'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'celery': {
+            'handlers': ['file'],
+            'level': 'DEBUG',
             'propagate': True,
         },
     },
@@ -302,7 +293,7 @@ DAY_OF_WEEK_MONDAY_TO_SATURDAY = env('DAY_OF_WEEK_MONDAY_TO_SATURDAY', default='
 DAY_OF_WEEK_SUNDAY = env('DAY_OF_WEEK_SUNDAY', default='sun')
 
 # CELERY_BEAT SHIPMENTS, SALES ORDERS, INVOICES
-MINUTE_ZOHO_SALES_MONDAY_TO_SATURDAY = env('MINUTE_ZOHO_SALES_MONDAY_TO_SATURDAY', default='*/5')
+MINUTE_ZOHO_SALES_MONDAY_TO_SATURDAY = env('MINUTE_ZOHO_SALES_MONDAY_TO_SATURDAY', default='*/30')
 HOUR_ZOHO_SALES_MONDAY_TO_SATURDAY = env('HOUR_ZOHO_SALES_MONDAY_TO_SATURDAY', default='7-17')
 MINUTE_ZOHO_SALES_SUNDAY = env('MINUTE_ZOHO_SALES_SUNDAY', default=0)
 HOUR_ZOHO_SALES_SUNDAY = env('HOUR_ZOHO_SALES_SUNDAY', default='*/6')
@@ -320,7 +311,7 @@ CRONTAB_ZOHO_SALES_SUNDAY = crontab(
 )
 
 # CUSTOMERS, ITEMS
-MINUTE_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY = env('MINUTE_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY', default='*/59')
+MINUTE_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY = env('MINUTE_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY', default='*/30')
 HOUR_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY = env('HOUR_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY', default='7-17')
 MINUTE_ZOHO_CUSTOMERS_ITEMS_SUNDAY = env('MINUTE_ZOHO_CUSTOMERS_ITEMS_SUNDAY', default=30)
 HOUR_ZOHO_CUSTOMERS_ITEMS_SUNDAY = env('HOUR_ZOHO_CUSTOMERS_ITEMS_SUNDAY', default='*/12')
@@ -358,6 +349,10 @@ CRONTAB_SENITRON_SUNDAY = crontab(
 # SCHEDULES
 CELERY_BEAT_SCHEDULE = {
     # MONDAY_TO_SATURDAY
+    'run-task-sequence-zoho-customers-items-monday-saturday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_customers_items',
+        'schedule': CRONTAB_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY,
+    },
     'run-task-sequence-zoho-sales-monday-saturday': {
         'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales',
         'schedule': CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY,
@@ -366,12 +361,13 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
         'schedule': CRONTAB_SENITRON_MONDAY_TO_SATURDAY,
     },
-    'run-task-sequence-zoho-customers-items-monday-saturday': {
-        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_customers_items',
-        'schedule': CRONTAB_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY,
-    },
+    
 
     # SUNDAY
+    'run-task-sequence-zoho-customers-items-sunday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_customers_items',
+        'schedule': CRONTAB_ZOHO_CUSTOMERS_ITEMS_SUNDAY,
+    },
     'run-task-sequence-zoho-sales-sunday': {
         'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales',
         'schedule': CRONTAB_ZOHO_SALES_SUNDAY,
@@ -380,10 +376,7 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
         'schedule': CRONTAB_SENITRON_SUNDAY,
     },
-    'run-task-sequence-zoho-customers-items-sunday': {
-        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_customers_items',
-        'schedule': CRONTAB_ZOHO_CUSTOMERS_ITEMS_SUNDAY,
-    },
+    
     
 }
 

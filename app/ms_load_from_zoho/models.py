@@ -99,6 +99,7 @@ class ZohoInventoryItem(Document):
     unitkey_code = StringField(max_length=255, null=True)
     synced_with_senitron = BooleanField(default=False)
     ignore_errors = BooleanField(default=False)
+    zoho_org_id = StringField(max_length=255, null=True)
 
     meta = {
         'collection': 'zoho_inventory_item'
@@ -147,6 +148,7 @@ class ZohoInventoryShipmentSalesOrder(Document):
 
     created_time = DateTimeField(null=True)
     last_modified_time = DateTimeField(null=True)
+    zoho_org_id = StringField(max_length=255, null=True)
 
     meta = {
         'collection': 'zoho_inventory_shipment_sales_order',
@@ -239,6 +241,7 @@ class ZohoShipmentOrder(Document):
     taxes = ListField(DynamicField(), default=list, null=True)
     tracking_statuses = ListField(DynamicField(), default=list, null=True)
     multipiece_shipments = ListField(DynamicField(), default=list, null=True)
+    zoho_org_id = StringField(max_length=255, null=True)
 
     meta = {
         'collection': 'zoho_shipment_order',
@@ -307,6 +310,8 @@ class ZohoPackage(Document):
     template_type = StringField(max_length=255, null=True)
     
     zoho_shipment = ReferenceField('ZohoShipmentOrder', null=True)
+    
+    zoho_org_id = StringField(max_length=255, null=True)
 
     meta = {
         'collection': 'zoho_package',
@@ -378,6 +383,8 @@ class ZohoCustomer(Document):
     shipping_address = DynamicField()
     contact_persons = ListField(DynamicField(), default=list)
     default_templates = DynamicField()
+    
+    zoho_org_id = StringField(max_length=255, null=True)
 
     meta = {
         'collection': 'zoho_customer',
@@ -500,6 +507,8 @@ class ZohoFullInvoice(Document):
     all_items_matched = BooleanField(default=False)
     all_customer_matched = BooleanField(default=False)
     qb_customer_list_id = StringField(max_length=255, null=True)
+    
+    zoho_org_id = StringField(max_length=255, null=True)
 
     meta = {
         'collection': 'zoho_full_invoice', 

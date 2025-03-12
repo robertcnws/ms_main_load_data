@@ -7,6 +7,8 @@ from rest_framework.pagination import PageNumberPagination
 from bson.objectid import ObjectId
 from datetime import datetime as dt
 from ms_app_manage_auth.authentication import MongoTokenAuthentication
+from django.conf import settings
+from ms_load_from_zoho.models import AppConfig
 from ms_load_from_zoho.models import (
                                         ZohoInventoryItem, 
                                         ZohoShipmentOrder,
@@ -16,6 +18,7 @@ from ms_load_from_zoho.models import (
                                         ZohoInventoryShipmentSalesOrder,
                                      )
 import logging
+import requests
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -270,6 +273,9 @@ def sales_orders(request):
     end_date = data.get('end_date', None)
     installation_name = data.get('installation_name', None)
     
+    sales_orders_ids = data.get('sales_orders_ids', None)
+    not_sales_orders_ids = data.get('not_sales_orders_ids', None)
+    
     try:
         if start_date:
             start_date = dt.strptime(start_date, '%Y-%m-%d')
@@ -290,8 +296,14 @@ def sales_orders(request):
         queryset = ZohoInventoryShipmentSalesOrder.objects(date__lte=end_date)
     else:
         queryset = ZohoInventoryShipmentSalesOrder.objects.all()
+    if sales_orders_ids and not not_sales_orders_ids:
+        sales_orders_ids = sales_orders_ids.split(',')
+        queryset = [doc for doc in queryset if doc.salesorder_id in sales_orders_ids]
+    if not_sales_orders_ids and not sales_orders_ids:
+        not_sales_orders_ids = not_sales_orders_ids.split(',')
+        queryset = [doc for doc in queryset if doc.salesorder_id not in not_sales_orders_ids]
     if installation_name:
-        queryset = [doc for doc in queryset for item in doc.line_items if item.get('name') == installation_name]
+        queryset = [doc for doc in queryset for item in doc.line_items if installation_name.lower() in item.get('name', '').lower()]
     
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
@@ -329,6 +341,8 @@ def full_sales_orders(request):
     start_date = data.get('start_date', None)
     end_date = data.get('end_date', None)
     installation_name = data.get('installation_name', None)
+    sales_orders_ids = data.get('sales_orders_ids', None)
+    not_sales_orders_ids = data.get('not_sales_orders_ids', None)
     
     try:
         if start_date:
@@ -350,6 +364,12 @@ def full_sales_orders(request):
         queryset = ZohoInventoryShipmentSalesOrder.objects(date__lte=end_date)
     else:
         queryset = ZohoInventoryShipmentSalesOrder.objects.all()
+    if sales_orders_ids and not not_sales_orders_ids:
+        sales_orders_ids = sales_orders_ids.split(',')
+        queryset = [doc for doc in queryset if doc.salesorder_id in sales_orders_ids]
+    if not_sales_orders_ids and not sales_orders_ids:
+        not_sales_orders_ids = not_sales_orders_ids.split(',')
+        queryset = [doc for doc in queryset if doc.salesorder_id not in not_sales_orders_ids]
     if installation_name:
         queryset = [doc for doc in queryset for item in doc.line_items if item.get('name') == installation_name]
     
@@ -364,11 +384,14 @@ def full_sales_orders(request):
         list.append(doc_dict)
         
     for doc in list:
-        customer = ZohoCustomer.objects.get(contact_id=doc['customer_id'])
-        customer_dict = customer.to_mongo().to_dict()
-        if '_id' in customer_dict and isinstance(customer_dict['_id'], ObjectId):
-            customer_dict['_id'] = str(customer_dict['_id'])
-        doc['customer'] = customer_dict
+        customer = ZohoCustomer.objects(contact_id=doc['customer_id']).first()
+        if customer:
+            customer_dict = customer.to_mongo().to_dict()
+            if '_id' in customer_dict and isinstance(customer_dict['_id'], ObjectId):
+                customer_dict['_id'] = str(customer_dict['_id'])
+            doc['customer'] = customer_dict
+        else:
+            doc['customer'] = {}
         
     logger.info(
         f'Sales orders read: {len(list)}, '
@@ -384,3 +407,48 @@ def full_sales_orders(request):
         'previous': paginator.get_previous_link(),
         'results': list,
     }, status=status.HTTP_200_OK)
+    
+    
+# def get_access_token(client_id, client_secret, refresh_token):
+#     logger.info('Getting access token')
+#     token_url = settings.ZOHO_TOKEN_URL
+#     if not refresh_token:
+#         raise Exception("Refresh token is missing")
+#         # refresh_token = get_refresh_token()
+#     payload = {
+#         "client_id": client_id,
+#         "client_secret": client_secret,
+#         "refresh_token": refresh_token,
+#         "grant_type": "refresh_token",
+#     }
+#     response = requests.post(token_url, data=payload)
+#     if response.status_code == 200:
+#         access_token = response.json()["access_token"]
+#     else:
+#         raise Exception("Error retrieving access token")
+#     return access_token
+    
+    
+# def config_headers():
+#     app_config = AppConfig.objects.first()
+#     access_token = get_access_token(
+#         app_config.zoho_client_id,
+#         app_config.zoho_client_secret,
+#         app_config.zoho_refresh_token,
+#     )
+#     headers = {
+#         "Authorization": f"Zoho-oauthtoken {access_token}"
+#     }
+#     return headers
+    
+    
+# def get_customer_from_zoho(customer_id):
+#     url = f'{settings.ZOHO_BOOKS_CUSTOMERS_URL}/{customer_id}'
+#     app_config = AppConfig.objects.first()
+#     headers = config_headers()
+#     params = {
+#         'organization_id': app_config.zoho_org_id,
+#         'per_page': 200,
+#         'page': 1
+#     }
+    

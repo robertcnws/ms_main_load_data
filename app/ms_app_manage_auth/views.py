@@ -10,6 +10,15 @@ from django.contrib.auth import login, logout, authenticate, BACKEND_SESSION_KEY
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination 
+from bson.objectid import ObjectId
+from .authentication import MongoTokenAuthentication
+from .models import System, ModuleSystem, PermissionModuleSystem, LoginUser
+
 from .models import (
                         System,
                         ModuleSystem,
@@ -26,6 +35,15 @@ from .forms import (
                     )
 from datetime import datetime
 import uuid
+import logging
+import json
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+class CustomPagination(PageNumberPagination):
+    page_size_query_param = 'page_size'
+    max_page_size = 1000
 
 # HEALTH CHECK VIEW
 
@@ -333,6 +351,32 @@ class AsignPermissionsView(View):
         return render(request, 'asign_permissions.html', {'form': form})
 
 @method_decorator(login_required(login_url='login'), name='dispatch')
+class RemovePermissionsAjaxView(View):
+    def get(self, request, user_id, pk):
+        permission = PermissionModuleSystem.objects(id=pk).first()
+        user = LoginUser.objects(id=user_id).first()
+        if not permission or not user:
+            return JsonResponse({'status': 'error'}, status=404)
+        if permission in user.permissions:
+            return render(request, 'assign_permission_module_system_confirm_delete.html', {
+                'permission': permission,
+                'user': user
+            })
+    
+    def post(self, request, user_id, pk):
+        if not request.user.is_authenticated or not request.user.is_staff:
+            raise PermissionDenied
+        permission = PermissionModuleSystem.objects(id=pk).first()
+        user = LoginUser.objects(id=user_id).first()
+        if not permission or not user:
+            return JsonResponse({'status': 'error'}, status=404)
+        if permission in user.permissions:
+            user.permissions.remove(permission)
+            user.save()
+        return JsonResponse({'status': 'success'})
+    
+    
+@method_decorator(login_required(login_url='login'), name='dispatch')
 class AssignPermissionsAjaxView(View):
     def post(self, request):
         if not request.user.is_authenticated or not request.user.is_staff:
@@ -403,7 +447,7 @@ class LoadUserPermissionsView(View):
                     'module': perm.module_system.name,
                     'system': perm.module_system.system.name,
                     'edit_url': f"/api/manage/auth/permissions/edit/{perm.id}/",
-                    'delete_url': f"/api/manage/auth/permissions/delete/{perm.id}/"
+                    'delete_url': f"/api/manage/auth/remove-permissions/{user.id}/{perm.id}/"
                 } for perm in sorted_permissions]
                 return JsonResponse({'permissions': permissions})
         return JsonResponse({'permissions': []})
@@ -551,3 +595,168 @@ class LoginUserDeleteView(View):
 
 def generate_token():
         return str(uuid.uuid4())
+    
+    
+@api_view(['GET'])
+@authentication_classes([MongoTokenAuthentication])
+@permission_classes([IsAuthenticated])
+def users_permissions(request):
+    data = request.query_params.dict()
+    username = data.get('username', None)
+    
+    if username:
+        queryset = LoginUser.objects(username=username)
+    else:
+        queryset = LoginUser.objects.all()
+    
+    paginator = CustomPagination()
+    paginated_queryset = paginator.paginate_queryset(queryset, request)
+    
+    permission_cache = {}
+    module_cache = {}
+    system_cache = {}
+    
+    results = []  
+    for doc in paginated_queryset:
+        doc_dict = doc.to_mongo().to_dict()
+        
+        if '_id' in doc_dict and isinstance(doc_dict['_id'], ObjectId):
+            doc_dict['_id'] = str(doc_dict['_id'])
+        
+        permissions_out = []
+        for perm in doc_dict.get('permissions', []):
+            
+            perm_id = str(perm) if perm else None
+            
+            if not perm_id:
+                continue
+            
+            if perm_id in permission_cache:
+                full_perm_dict = permission_cache[perm_id]
+            else:
+                perm_obj = PermissionModuleSystem.objects(id=perm_id).first()
+                if perm_obj is None:
+                    continue
+                full_perm_dict = perm_obj.to_mongo().to_dict()
+                full_perm_dict['_id'] = perm_id
+                permission_cache[perm_id] = full_perm_dict
+            
+            module_field = full_perm_dict.get('module_system')
+            if module_field and isinstance(module_field, ObjectId):
+                module_id = str(module_field)
+                if module_id in module_cache:
+                    module_dict = module_cache[module_id]
+                else:
+                    module_obj = ModuleSystem.objects(id=module_id).first()
+                    if module_obj:
+                        module_dict = module_obj.to_mongo().to_dict()
+                        module_dict['_id'] = module_id
+                        module_cache[module_id] = module_dict
+                    else:
+                        module_dict = {}
+                
+                system_field = module_dict.get('system')
+                if system_field and isinstance(system_field, ObjectId):
+                    system_id = str(system_field)
+                    if system_id in system_cache:
+                        system_dict = system_cache[system_id]
+                    else:
+                        system_obj = System.objects(id=system_id).first()
+                        if system_obj:
+                            system_dict = system_obj.to_mongo().to_dict()
+                            system_dict['_id'] = system_id
+                            system_cache[system_id] = system_dict
+                        else:
+                            system_dict = {}
+                    module_dict['system'] = system_dict
+                full_perm_dict['module_system'] = module_dict
+
+            permissions_out.append(full_perm_dict)
+        
+        doc_dict['permissions'] = permissions_out
+        
+        if 'password' in doc_dict:
+            del doc_dict['password']
+        if 'token' in doc_dict:
+            del doc_dict['token']
+            
+        results.append(doc_dict)
+    
+    logger.info(
+        f'Permissions read: {len(results)}, '
+        f'paginated: {len(paginated_queryset)}, '
+        f'Count: {paginator.page.paginator.count}, '
+        f'Number: {paginator.page.number}, '
+        f'Number of pages: {paginator.page.paginator.num_pages}'
+    )
+    
+    return Response({
+        'count': paginator.page.paginator.count if paginator.page else len(results),
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': results,
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@authentication_classes([MongoTokenAuthentication])
+@permission_classes([IsAuthenticated])
+def manage_user_permissions(request):
+    data = request.data
+    username = data.get('username', None)
+    
+    if not username:
+        return Response({'status': 'Username is required.'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    user = LoginUser.objects(username=username).first()
+    if not user:
+        user = LoginUser(
+            username=username,
+            first_name=data.get('first_name', ''),
+            last_name=data.get('last_name', ''),
+            email=data.get('email', ''),
+            is_staff=data.get('is_staff', False),
+            is_active=data.get('is_active', True),
+            phone_number=data.get('phone_number', ''),
+            country=data.get('country', ''),
+            state=data.get('state', ''),
+            city=data.get('city', ''),
+            address=data.get('address', ''),
+            zip_code=data.get('zip_code', ''),
+        )
+        user.set_password(data['password'] if 'password' in data else '')
+    
+    user.permissions = []
+    
+    data_permissions_raw = data.get('data', {})
+    if isinstance(data_permissions_raw, str):
+        try:
+            data_permissions = json.loads(data_permissions_raw)
+        except json.JSONDecodeError:
+            return Response({'status': 'Invalid JSON in data field.'}, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        data_permissions = data_permissions_raw or {}
+        
+    name_system = data_permissions.get('system', None)
+    system = System.objects(name=name_system).first()
+    if not system:
+        logger.info(f'System not found: {name_system}')
+        return Response({'status': 'System not found.'}, status=status.HTTP_404_NOT_FOUND)
+    data_modules = data_permissions.get('modules', [])
+    for module_data in data_modules:
+        name_module = module_data.get('name', None)
+        module = ModuleSystem.objects(name=name_module, system=system).first()
+        if not module:
+            logger.info(f'Module not found: {name_module} - {system.name}')
+            return Response({'status': 'Module not found.'}, status=status.HTTP_404_NOT_FOUND)
+        data_permissions = module_data.get('permissions', [])
+        for perm_data in data_permissions:
+            name_perm = perm_data.get('name', None)
+            permission = PermissionModuleSystem.objects(name=name_perm, module_system=module).first()
+            if not permission:
+                logger.info(f'Permission not found: {name_perm} - {module.name} - {system.name}')
+                return Response({'status': 'Permission not found.'}, status=status.HTTP_404_NOT_FOUND)
+            if permission not in user.permissions:
+                user.permissions.append(permission)
+    user.save()
+    return Response({'status': 'User updated successfully.'}, status=status.HTTP_201_CREATED)

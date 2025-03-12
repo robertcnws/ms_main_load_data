@@ -24,10 +24,12 @@ urlpatterns = [
     
     # URL para Asign Permissions a Usuarios
     path('auth/asign-permissions/', views.AsignPermissionsView.as_view(), name='asign_permissions'),
+    path('auth/remove-permissions/<str:user_id>/<str:pk>/', views.RemovePermissionsAjaxView.as_view(), name='remove_permissions'),
     path('auth/ajax/load-modules/', views.LoadModulesView.as_view(), name='ajax_load_modules'),
     path('auth/ajax/load-permissions/', views.LoadPermissionsView.as_view(), name='ajax_load_permissions'),
     path('auth/ajax/load-user-permissions/', views.LoadUserPermissionsView.as_view(), name='ajax_load_user_permissions'),
     path('auth/ajax/assign-permissions/', views.AssignPermissionsAjaxView.as_view(), name='ajax_assign_permissions'),
+    
     
     # URL para LoginUser
     
@@ -35,6 +37,8 @@ urlpatterns = [
     path('auth/users/create/', views.LoginUserCreateView.as_view(), name='loginuser_create'),
     path('auth/users/update/<str:user_id>/', views.LoginUserUpdateView.as_view(), name='loginuser_update'),
     path('auth/users/delete/<str:user_id>/', views.LoginUserDeleteView.as_view(), name='loginuser_delete'),
+    path('auth/users/permissions/', views.users_permissions, name='users_permissions'),
+    path('auth/users/manage-user-permissions/', views.manage_user_permissions, name='manage_user_permissions'),
     
     # URL para LoginUser Login
     

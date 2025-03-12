@@ -16,7 +16,7 @@ from .models import (
 # CREATE INVENTORY ITEM INSTANCE
 #############################################
 
-def create_inventory_item_instance(logger, data):
+def create_inventory_item_instance(logger, data, zoho_org_id):
     current_timezone = timezone.get_current_timezone()
     
     created_time_str = data.get('created_time')
@@ -69,6 +69,7 @@ def create_inventory_item_instance(logger, data):
         'hsn_or_sac': data.get('hsn_or_sac') if isinstance(data.get('hsn_or_sac'), (int, float)) else 0,
         'sat_item_key_code': data.get('sat_item_key_code', ''),
         'unitkey_code': data.get('unitkey_code', ''),
+        'zoho_org_id': zoho_org_id,
     }
     
     existing_item = ZohoInventoryItem.objects(item_id=item_id).first()
@@ -88,7 +89,7 @@ def create_inventory_item_instance(logger, data):
 #############################################
 
 
-def create_inventory_sales_order_instance(logger, data):
+def create_inventory_sales_order_instance(logger, data, zoho_org_id):
     
     current_timezone = timezone.get_current_timezone()
     
@@ -184,6 +185,7 @@ def create_inventory_sales_order_instance(logger, data):
         shipment_sub_statuses=shipment_sub_statuses,
         created_time=created_time,
         last_modified_time=last_modified_time,
+        zoho_org_id=zoho_org_id,
     )
     
     return sales_order
@@ -195,7 +197,7 @@ def create_inventory_sales_order_instance(logger, data):
 #############################################
 
 
-def create_inventory_shipment_instance(logger, data):
+def create_inventory_shipment_instance(logger, data, zoho_org_id):
     
     current_timezone = timezone.get_current_timezone()
     
@@ -396,6 +398,7 @@ def create_inventory_shipment_instance(logger, data):
         taxes=taxes,
         tracking_statuses=tracking_statuses,
         multipiece_shipments=multipiece_shipments,
+        zoho_org_id=zoho_org_id,
     )
 
     return shipment
@@ -407,7 +410,7 @@ def create_inventory_shipment_instance(logger, data):
 #############################################
 
 
-def create_inventory_package_instance(logger, data, zoho_shipment=None):
+def create_inventory_package_instance(logger, data, zoho_shipment=None, zoho_org_id=None):
     current_timezone = timezone.get_current_timezone()
     
     def parse_date(date_str):
@@ -553,6 +556,7 @@ def create_inventory_package_instance(logger, data, zoho_shipment=None):
         template_name=template_name,
         template_type=template_type,
         zoho_shipment=zoho_shipment,
+        zoho_org_id=zoho_org_id,
     )
     return package
 
@@ -563,7 +567,7 @@ def create_inventory_package_instance(logger, data, zoho_shipment=None):
 #############################################
 
 
-def create_books_customers_instance(logger, data):
+def create_books_customers_instance(logger, data, zoho_org_id):
     current_timezone = timezone.get_current_timezone()
 
     def parse_datetime(datetime_str):
@@ -702,6 +706,7 @@ def create_books_customers_instance(logger, data):
         shipping_address=shipping_address,
         contact_persons=contact_persons,
         default_templates=default_templates,
+        zoho_org_id=zoho_org_id,
     )
     
     return customer
@@ -712,7 +717,7 @@ def create_books_customers_instance(logger, data):
 # CREATE BOOKS INVOICE INSTANCE
 #############################################
 
-def create_books_invoice_instance(logger, data):
+def create_books_invoice_instance(logger, data, zoho_org_id):
     def parse_invoice_date(datetime_str):
         if not datetime_str:
             return None
@@ -797,6 +802,7 @@ def create_books_invoice_instance(logger, data):
         all_items_matched=bool(data.get('all_items_matched', False)),
         all_customer_matched=bool(data.get('all_customer_matched', False)),
         qb_customer_list_id=data.get('qb_customer_list_id'),
+        zoho_org_id=zoho_org_id,
     )
     
     return invoice
