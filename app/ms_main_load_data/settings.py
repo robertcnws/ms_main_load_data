@@ -71,8 +71,14 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': True,
         },
+        'pymongo.topology': {
+            'handlers': ['file'],
+            'level': 'WARNING', 
+            'propagate': False,
+        },
     },
 }
+
 
 
 ALLOWED_HOSTS = ['*']
@@ -376,7 +382,6 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
         'schedule': CRONTAB_SENITRON_SUNDAY,
     },
-    
     
 }
 

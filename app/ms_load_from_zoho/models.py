@@ -149,6 +149,7 @@ class ZohoInventoryShipmentSalesOrder(Document):
     created_time = DateTimeField(null=True)
     last_modified_time = DateTimeField(null=True)
     zoho_org_id = StringField(max_length=255, null=True)
+    reference_number = StringField(max_length=255, null=True)
 
     meta = {
         'collection': 'zoho_inventory_shipment_sales_order',

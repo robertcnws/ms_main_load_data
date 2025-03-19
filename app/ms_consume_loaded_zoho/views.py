@@ -371,7 +371,7 @@ def full_sales_orders(request):
         not_sales_orders_ids = not_sales_orders_ids.split(',')
         queryset = [doc for doc in queryset if doc.salesorder_id not in not_sales_orders_ids]
     if installation_name:
-        queryset = [doc for doc in queryset for item in doc.line_items if item.get('name') == installation_name]
+        queryset = [doc for doc in queryset for item in doc.line_items if installation_name.lower() in item.get('name', '').lower()]
     
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
@@ -409,46 +409,21 @@ def full_sales_orders(request):
     }, status=status.HTTP_200_OK)
     
     
-# def get_access_token(client_id, client_secret, refresh_token):
-#     logger.info('Getting access token')
-#     token_url = settings.ZOHO_TOKEN_URL
-#     if not refresh_token:
-#         raise Exception("Refresh token is missing")
-#         # refresh_token = get_refresh_token()
-#     payload = {
-#         "client_id": client_id,
-#         "client_secret": client_secret,
-#         "refresh_token": refresh_token,
-#         "grant_type": "refresh_token",
-#     }
-#     response = requests.post(token_url, data=payload)
-#     if response.status_code == 200:
-#         access_token = response.json()["access_token"]
-#     else:
-#         raise Exception("Error retrieving access token")
-#     return access_token
+
+@api_view(['GET'])
+@authentication_classes([MongoTokenAuthentication])
+@permission_classes([IsAuthenticated])
+def delete_sales_orders(request):
     
+    data = request.query_params.dict()
     
-# def config_headers():
-#     app_config = AppConfig.objects.first()
-#     access_token = get_access_token(
-#         app_config.zoho_client_id,
-#         app_config.zoho_client_secret,
-#         app_config.zoho_refresh_token,
-#     )
-#     headers = {
-#         "Authorization": f"Zoho-oauthtoken {access_token}"
-#     }
-#     return headers
+    sales_orders_ids = data.get('sales_orders_ids', None)
     
+    if not sales_orders_ids:
+        return Response({'error': 'Missing sales_orders_ids'}, status=status.HTTP_400_BAD_REQUEST)
     
-# def get_customer_from_zoho(customer_id):
-#     url = f'{settings.ZOHO_BOOKS_CUSTOMERS_URL}/{customer_id}'
-#     app_config = AppConfig.objects.first()
-#     headers = config_headers()
-#     params = {
-#         'organization_id': app_config.zoho_org_id,
-#         'per_page': 200,
-#         'page': 1
-#     }
+    sales_orders_ids = sales_orders_ids.split(',')
+    queryset = ZohoInventoryShipmentSalesOrder.objects(salesorder_id__in=sales_orders_ids)
+    queryset.delete()
     
+    return Response({'message': 'Sales orders deleted'}, status=status.HTTP_200_OK)

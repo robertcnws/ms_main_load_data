@@ -37,6 +37,8 @@ def task_load_books_customers():
 @shared_task
 def task_load_inventory_sales_orders():
     start_date = datetime.now().strftime("%Y-%m-%d")
+    # yesterday = timezone.now() - timezone.timedelta(days=1)
+    # start_date = yesterday.strftime("%Y-%m-%d")
     data = {'start_date': start_date}
     request = HttpRequest()
     request.method = 'POST'

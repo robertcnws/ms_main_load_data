@@ -143,6 +143,7 @@ def create_inventory_sales_order_instance(logger, data, zoho_org_id):
     custom_fields = data.get('custom_fields', [])
     order_sub_statuses = data.get('order_sub_statuses', [])
     shipment_sub_statuses = data.get('shipment_sub_statuses', [])
+    reference_number = data.get('reference_number', '')
     
     if not salesorder_id:
         logger.error("Missing salesorder_id")
@@ -186,6 +187,7 @@ def create_inventory_sales_order_instance(logger, data, zoho_org_id):
         created_time=created_time,
         last_modified_time=last_modified_time,
         zoho_org_id=zoho_org_id,
+        reference_number=reference_number,
     )
     
     return sales_order

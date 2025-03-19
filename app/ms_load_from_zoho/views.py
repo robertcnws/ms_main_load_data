@@ -60,18 +60,22 @@ def generate_auth_url(request, zoho_org_id):
     client_id = app_config.zoho_client_id
     redirect_uri = app_config.zoho_redirect_uri
     scopes = ",".join(settings.ZOHO_SCOPES)
-    auth_url = f"https://accounts.zoho.com/oauth/v2/auth?scope={scopes}&client_id={client_id}&response_type=code&access_type=offline&redirect_uri={redirect_uri}"
+    auth_url = (
+        f"https://accounts.zoho.com/oauth/v2/auth?"
+        f"scope={scopes}&client_id={client_id}&response_type=code&access_type=offline"
+        f"&prompt=consent&redirect_uri={redirect_uri}"
+    )
     return JsonResponse({'auth_url': auth_url}, status=200)
 
 #############################################
 # GET ACCESS TOKEN
 #############################################
 
-def get_access_token(client_id, client_secret, refresh_token):
-    logger.info('Getting access token')
+def get_access_token(client_id, client_secret, refresh_token, zoho_org_id):
+    logger.info(f'Getting access token: {zoho_org_id}')
     token_url = settings.ZOHO_TOKEN_URL
     if not refresh_token:
-        raise Exception("Refresh token is missing")
+        raise Exception(f"Refresh token is missing for Zoho Org ID: {zoho_org_id}")
         # refresh_token = get_refresh_token()
     payload = {
         "client_id": client_id,
@@ -79,12 +83,16 @@ def get_access_token(client_id, client_secret, refresh_token):
         "refresh_token": refresh_token,
         "grant_type": "refresh_token",
     }
-    response = requests.post(token_url, data=payload)
-    if response.status_code == 200:
-        access_token = response.json()["access_token"]
-    else:
-        raise Exception("Error retrieving access token")
-    return access_token
+    try:
+        response = requests.post(token_url, data=payload)
+        if response.status_code == 200:
+            access_token = response.json()["access_token"]
+            return access_token
+        else:
+            raise Exception(f"Failed to get access token for Zoho Org ID {zoho_org_id}: {response.text}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error getting access token for Zoho Org ID {zoho_org_id}: {e}")
+        raise Exception(f"Error getting access token for Zoho Org ID {zoho_org_id}: {e}")
 
 #############################################
 # GET REFRESH TOKEN
@@ -99,12 +107,16 @@ def refresh_zoho_access_token(zoho_org_id):
         'client_secret': app_config.zoho_client_secret,
         'grant_type': 'refresh_token'
     }
-    response = requests.post(refresh_url, data=payload)
-    if response.status_code == 200:
-        new_token = response.json().get('access_token')
-        return new_token
-    else:
-        raise Exception("Failed to refresh Zoho token")
+    try:
+        response = requests.post(refresh_url, data=payload)
+        if response.status_code == 200:
+            new_token = response.json().get('access_token')
+            return new_token
+        else:
+            raise Exception(f"Failed to refresh Zoho token for Zoho Org ID {zoho_org_id}: {response.text}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error refreshing Zoho token for Zoho Org ID {zoho_org_id} : {e}")
+        raise Exception(f"Error refreshing Zoho token for Zoho Org ID {zoho_org_id}: {e}")
 
 @csrf_exempt
 @api_view(['GET'])
@@ -134,12 +146,13 @@ def get_refresh_token(request, zoho_org_id):
         if access_token and refresh_token:
             app_config.zoho_refresh_token = refresh_token
             app_config.save()
-            return redirect(f'{settings.FRONTEND_URL}')
+            return redirect(reverse("ms_load_from_zoho:zoho_api_settings", kwargs={'zoho_org_id': zoho_org_id}))
         else:
-            return JsonResponse({'error': 'Failed to obtain access_token and/or refresh_token'}, status=400)
+            raise Exception(f"Failed to obtain access_token and/or refresh_token for Zoho Org ID: {zoho_org_id}")
 
     except requests.exceptions.RequestException as e:
-        return JsonResponse({'error': f'An error occurred: {str(e)}'}, status=500)
+        logger.error(f"Error obtaining access_token and/or refresh_token for Zoho Org ID: {zoho_org_id}: {e}")
+        return JsonResponse({'error': 'Failed to get refresh token'}, status=500)
 
 
 #############################################
@@ -190,6 +203,7 @@ def zoho_api_connect(request, zoho_org_id):
                 app_config.zoho_client_id,
                 app_config.zoho_client_secret,
                 app_config.zoho_refresh_token,
+                zoho_org_id
             )
             messages.success(request, "Zoho API connected successfully.")
         except Exception as e:
@@ -205,6 +219,7 @@ def config_headers(zoho_org_id):
         app_config.zoho_client_id,
         app_config.zoho_client_secret,
         app_config.zoho_refresh_token,
+        zoho_org_id
     )
     headers = {
         "Authorization": f"Zoho-oauthtoken {access_token}"
@@ -407,19 +422,20 @@ def fetch_sales_order_details(item, session, headers, zoho_org_id):
 def load_inventory_sales_orders(request, zoho_org_id):
     MAX_WORKERS = 10
     app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
-    logger.debug(app_config)
+    logger.info(f'App Config: {app_config}')
     try:
         headers = config_headers(zoho_org_id)
     except Exception as e:
         logger.error(f"Error connecting to Zoho API: {str(e)}")
         return JsonResponse({'error': f"Error connecting to Zoho API (Load Items): {str(e)}"}, status=500)
 
-    data = json.loads(request.body)
-    start_date = data.get('start_date')
-    end_date = data.get('end_date')
-
+    data = json.loads(request.body if request.body else '{}')
+    start_date = data.get('start_date', None)
+    end_date = data.get('end_date', None)
+    
     if not start_date:
-        return JsonResponse({'error': 'Date is missing'}, status=400)
+        return JsonResponse({'error': 'Start date is required'}, status=400)
+    
     try:
         dt.strptime(start_date, '%Y-%m-%d')
         if end_date:
