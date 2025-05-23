@@ -280,6 +280,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 FRONTEND_URL = env('FRONTEND_URL', default='')
 
+# ZOHO ORG ID
+
+ZOHO_ORG_ID_NWSHOME = env('ZOHO_ORG_ID_NWSHOME', default='')
+ZOHO_ORG_ID = env('ZOHO_ORG_ID', default='')
+
 # Celery
 
 CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='')

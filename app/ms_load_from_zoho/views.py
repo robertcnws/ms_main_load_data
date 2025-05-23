@@ -586,7 +586,7 @@ def load_inventory_sales_orders_by_customer_name(request, zoho_org_id):
             return JsonResponse({'error': 'Failed to fetch sales orders'}, status=500)
     
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(fetch_sales_order_details, item, session, headers) for item in items_to_get]
+        futures = [executor.submit(fetch_sales_order_details, item, session, headers, zoho_org_id) for item in items_to_get]
         full_items_to_get = [future.result() for future in as_completed(futures) if future.result()]
     
     salesorder_ids = [item['salesorder_id'] for item in full_items_to_get]

@@ -1,4 +1,6 @@
 from bson import json_util
+from mongoengine import Q
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from rest_framework import status
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -8,6 +10,7 @@ from bson.objectid import ObjectId
 from datetime import datetime as dt
 from ms_app_manage_auth.authentication import MongoTokenAuthentication
 from django.conf import settings
+from django.http import JsonResponse
 from ms_load_from_zoho.models import AppConfig
 from ms_load_from_zoho.models import (
                                         ZohoInventoryItem, 
@@ -17,6 +20,17 @@ from ms_load_from_zoho.models import (
                                         ZohoFullInvoice,
                                         ZohoInventoryShipmentSalesOrder,
                                      )
+from ms_load_from_zoho.views import (
+                                        config_headers,
+                                        refresh_zoho_access_token,
+                                        fetch_sales_order_details
+)
+
+from .utils import (
+                    transform_data_to_mongo,
+                    merge_list
+)
+
 import logging
 import requests
 
@@ -77,7 +91,24 @@ def items(request):
 @authentication_classes([MongoTokenAuthentication])
 @permission_classes([IsAuthenticated])
 def customers(request):
+    params = request.query_params.dict()
     queryset = ZohoCustomer.objects.all() or []
+    
+    if params.get('first_name'):
+        queryset = queryset.filter(first_name__icontains=params['first_name'])
+    if params.get('last_name'):
+        queryset = queryset.filter(last_name__icontains=params['last_name'])
+    if params.get('phone') or params.get('mobile'):
+        number = params['phone'] if params.get('phone') else params['mobile']
+        queryset = queryset.filter(
+            Q(phone__exists=True, phone__ne="", phone__icontains=number) |
+            Q(mobile__exists=True, mobile__ne="", mobile__icontains=number)
+        )
+    if params.get('email'):
+        queryset = queryset.filter(email__icontains=params['email'])
+    if params.get('zoho_org_id'):
+        queryset = queryset.filter(zoho_org_id=params['zoho_org_id'])
+        
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
 
@@ -427,3 +458,163 @@ def delete_sales_orders(request):
     queryset.delete()
     
     return Response({'message': 'Sales orders deleted'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@authentication_classes([MongoTokenAuthentication])
+@permission_classes([IsAuthenticated])
+def sales_orders_to_service(request):
+    params = request.query_params.dict()
+    is_recent = params.get('is_recent', 'false').lower() == 'true'
+    salesorder_number = params.get('salesorder_number')
+
+    sales_orders_in_zoho_nws = []
+    sales_orders_in_zoho_nwshome = []
+    
+    if salesorder_number:
+        sales_orders = list(ZohoInventoryShipmentSalesOrder.objects(salesorder_number=salesorder_number))
+        sales_orders = [transform_data_to_mongo(so) for so in sales_orders]
+        if not is_recent:
+            sales_orders_in_zoho_nws = load_inventory_sales_orders_by(settings.ZOHO_ORG_ID, param=salesorder_number)
+            sales_orders_in_zoho_nwshome = load_inventory_sales_orders_by(settings.ZOHO_ORG_ID_NWSHOME, param=salesorder_number)
+    else:
+        queryset = ZohoCustomer.objects.all() 
+        if params.get('company_name'):
+            value = params['company_name']
+            queryset = queryset.filter(
+                Q(first_name__exists=True, first_name__ne="", first_name__icontains=value) |
+                Q(contact_name__exists=True, contact_name__ne="", contact_name__icontains=value) |
+                Q(customer_name__exists=True, customer_name__ne="", customer_name__icontains=value) |
+                Q(company_name__exists=True, company_name__ne="", company_name__icontains=value)
+            )
+        if params.get('first_name'):
+            value = params['first_name']
+            queryset = queryset.filter(
+                Q(first_name__exists=True, first_name__ne="", first_name__icontains=value) |
+                Q(contact_name__exists=True, contact_name__ne="", contact_name__icontains=value) |
+                Q(customer_name__exists=True, customer_name__ne="", customer_name__icontains=value) |
+                Q(company_name__exists=True, company_name__ne="", company_name__icontains=value)
+            )
+        if params.get('last_name'):
+            value = params['last_name']
+            queryset = queryset.filter(
+                Q(last_name__exists=True, last_name__ne="", last_name__icontains=value) |
+                Q(contact_name__exists=True, contact_name__ne="", contact_name__icontains=value) |
+                Q(customer_name__exists=True, customer_name__ne="", customer_name__icontains=value) |
+                Q(company_name__exists=True, company_name__ne="", company_name__icontains=value)
+            )
+        if params.get('phone'):
+            value = params['phone']
+            queryset = queryset.filter(
+                Q(phone__exists=True, phone__ne="", phone__icontains=value) |
+                Q(mobile__exists=True, mobile__ne="", mobile__icontains=value)
+            )
+        if params.get('email'):
+            value = params['email']
+            queryset = queryset.filter(email__exists=True, email__ne="", email__icontains=value)
+            
+        customers = list(queryset)
+            
+        def get_sales_orders_from_zoho(customer):
+            if not customer:
+                return
+            local_sales_orders = ZohoInventoryShipmentSalesOrder.objects(customer_id=customer.contact_id)
+            _ = [transform_data_to_mongo(so) for so in local_sales_orders]
+            sales_orders_in_zoho_nws.extend(load_inventory_sales_orders_by(settings.ZOHO_ORG_ID, param=customer))
+            sales_orders_in_zoho_nwshome.extend(load_inventory_sales_orders_by(settings.ZOHO_ORG_ID_NWSHOME, param=customer))
+        
+        if not is_recent:
+            MAX_WORKERS = 10
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                futures = [executor.submit(get_sales_orders_from_zoho, customer) for customer in customers]
+                for future in as_completed(futures):
+                    future.result() 
+        
+        sales_orders = []
+        for customer in customers:
+            local_orders = ZohoInventoryShipmentSalesOrder.objects(customer_id=customer.contact_id)
+            sales_orders.extend([transform_data_to_mongo(so) for so in local_orders])
+    
+    if not is_recent:
+        if sales_orders_in_zoho_nws:
+            sales_orders.extend(sales_orders_in_zoho_nws)
+        if sales_orders_in_zoho_nwshome:
+            sales_orders.extend(sales_orders_in_zoho_nwshome)
+        if sales_orders_in_zoho_nws or sales_orders_in_zoho_nwshome:
+            sales_orders = merge_list(sales_orders)
+    
+    if salesorder_number:
+        sales_orders = [so for so in sales_orders if so.get('salesorder_number') == salesorder_number]
+    
+    return Response({
+        'count': len(sales_orders),
+        'results': sales_orders,
+    }, status=status.HTTP_200_OK)
+    
+    
+
+@api_view(['GET'])
+@authentication_classes([MongoTokenAuthentication])
+@permission_classes([IsAuthenticated])
+def refetch_salesorder(request, zoho_org_id, salesorder_number):
+            
+    sales_orders = load_inventory_sales_orders_by(zoho_org_id, param=salesorder_number)
+
+    return Response({
+        'count': len(sales_orders),
+        'results': sales_orders,
+    }, status=status.HTTP_200_OK)
+    
+
+# EXTRAS
+
+def load_inventory_sales_orders_by(zoho_org_id, param):
+    MAX_WORKERS = 10
+    app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
+    try:
+        headers = config_headers(zoho_org_id)
+    except Exception as e:
+        logger.error(f"Error connecting to Zoho API: {str(e)}")
+        return JsonResponse({'error': f"Error connecting to Zoho API (Load Items): {str(e)}"}, status=500)
+    
+    params = {
+        'organization_id': app_config.zoho_org_id,
+        'per_page': 200,
+        'page': 1,
+    }
+    
+    if not isinstance(param, str):
+        customer_id = param.contact_id
+        params['customer_id'] = customer_id
+    else:
+        params['salesorder_number'] = param
+    
+
+    url = settings.ZOHO_INVENTORY_SALESORDERS_URL
+    items_to_get = []
+    session = requests.Session()
+
+    while True:
+        try:
+            response = session.get(url, headers=headers, params=params)
+            if response.status_code == 401:
+                new_token = refresh_zoho_access_token(zoho_org_id)
+                headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
+                response = session.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            items = response.json()
+            print('items', items)
+            items_to_get.extend(items.get('salesorders', []))
+            if not items.get('page_context', {}).get('has_more_page', False):
+                break
+            params['page'] += 1
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching sales orders: {e}")
+            return JsonResponse({'error': 'Failed to fetch sales orders'}, status=500)
+    
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [executor.submit(fetch_sales_order_details, item, session, headers, zoho_org_id) for item in items_to_get]
+        full_items_to_get = [future.result() for future in as_completed(futures) if future.result()]
+                
+    
+    return full_items_to_get
