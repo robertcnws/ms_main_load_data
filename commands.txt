@@ -25,3 +25,21 @@ openssl pkcs12 -in nginx/certs/dns_cert.pfx -out nginx/certs/dns_cert.pem -nodes
 openssl pkcs12 -in nginx/certs/dns_cert.pfx -out nginx/certs/dns_key.pem -nodes -nocerts
 openssl pkcs12 -in nginx/certs/dns_cert.pfx -out nginx/certs/dns_chain.pem -nodes -nokeys -clcerts
 
+
+AWS:
+
+# MAIN LOAD
+# DJANGO
+aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 324037323031.dkr.ecr.us-east-2.amazonaws.com
+docker-compose -f docker-compose.aws.yml build aws_ms_main_load_data
+docker tag ms_main_load_data-aws_ms_main_load_data:latest 324037323031.dkr.ecr.us-east-2.amazonaws.com/nws/main-load-data:latest
+docker push 324037323031.dkr.ecr.us-east-2.amazonaws.com/nws/main-load-data:latest
+
+# MAIN LOAD 
+# MONGODB -- MONGOEXPRESS
+docker tag ms_main_load_data-aws_mongoexpress_main_load_data:latest 324037323031.dkr.ecr.us-east-2.amazonaws.com/nws/mongoexpress_main_load_data:latest  
+docker tag ms_main_load_data-aws_mongodb_main_load_data:latest 324037323031.dkr.ecr.us-east-2.amazonaws.com/nws/mongodb_main_load_data:latest
+docker push 324037323031.dkr.ecr.us-east-2.amazonaws.com/nws/mongoexpress_main_load_data:latest  
+docker push 324037323031.dkr.ecr.us-east-2.amazonaws.com/nws/mongodb_main_load_data:latest
+
+
