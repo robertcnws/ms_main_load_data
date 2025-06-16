@@ -600,17 +600,31 @@ def invoices_to_rewards_points(request):
         
     if params.get('phone'):
         value = params['phone']
-        queryset = queryset.filter(
-            Q(contact_persons_details__phone__exists=True, contact_persons_details__phone__ne="", contact_persons_details__phone__icontains=value) |
-            Q(contact_persons_details__mobile__exists=True, contact_persons_details__mobile__ne="", contact_persons_details__mobile__icontains=value)
-        )
+        regex = {"$regex": value, "$options": "i"}
+        
+        queryset = ZohoFullInvoice.objects(__raw__={
+            "$or": [
+                {"contact_persons_details": {
+                    "$elemMatch": {"phone": regex}
+                }},
+                {"contact_persons_details": {
+                    "$elemMatch": {"mobile": regex}
+                }}
+            ]
+        })
         
     if params.get('email'):
         value = params['email']
-        queryset = queryset.filter(
-            Q(email__exists=True, email__ne="", email__icontains=value) |
-            Q(contact_persons_details__email__exists=True, contact_persons_details__email__ne="", contact_persons_details__email__icontains=value)
-        )
+        regex = {"$regex": value, "$options": "i"}
+
+        queryset = ZohoFullInvoice.objects(__raw__={
+            "$or": [
+                {"email": regex},
+                {"contact_persons_details": {
+                    "$elemMatch": {"email": regex}
+                }}
+            ]
+        })
             
     invoices_in_zoho_nws = list(queryset)
     
