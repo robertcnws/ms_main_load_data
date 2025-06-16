@@ -122,7 +122,7 @@ pipeline {
           credentialsId: 'aws-ecr-creds'
         ]]) {
           script {
-            def services = [env.AWS_BACKEND_SERVICE, env.AWS_FRONTEND_SERVICE]
+            def services = [env.AWS_BACKEND_SERVICE]
             services.each { svc ->
               echo "⏳ Waiting for ${svc} to complete deployment…"
               timeout(time: 10, unit: 'MINUTES') {
@@ -148,7 +148,7 @@ pipeline {
               }
               echo "✅ ${svc} deployment COMPLETED"
             }
-            echo "✅ Both deployments are COMPLETED"
+            echo "✅ All deployments are COMPLETED"
           }
         }
       }
