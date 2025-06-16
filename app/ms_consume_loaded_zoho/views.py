@@ -597,11 +597,10 @@ def invoices_to_rewards_points(request):
             Q(contact_persons_details__last_name__ne="") &
             Q(contact_persons_details__last_name__icontains=value)
         )
+        
     if params.get('phone'):
         value = params['phone']
         queryset = queryset.filter(
-            Q(phone__exists=True, phone__ne="", phone__icontains=value) |
-            Q(mobile__exists=True, mobile__ne="", mobile__icontains=value) | 
             Q(contact_persons_details__phone__exists=True, contact_persons_details__phone__ne="", contact_persons_details__phone__icontains=value) |
             Q(contact_persons_details__mobile__exists=True, contact_persons_details__mobile__ne="", contact_persons_details__mobile__icontains=value)
         )
