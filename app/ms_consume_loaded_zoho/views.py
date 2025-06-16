@@ -565,6 +565,62 @@ def refetch_salesorder(request, zoho_org_id, salesorder_number):
         'results': sales_orders,
     }, status=status.HTTP_200_OK)
     
+    
+
+@api_view(['GET'])
+@authentication_classes([MongoTokenAuthentication])
+@permission_classes([IsAuthenticated])
+def invoices_to_rewards_points(request):
+    params = request.query_params.dict()
+
+    invoices_in_zoho_nws = []
+        
+    queryset = ZohoFullInvoice.objects.all() 
+        
+    if params.get('customer_name'):
+        value = params['customer_name']
+        queryset = queryset.filter(
+            Q(customer_name__exists=True, customer_name__ne="", customer_name__icontains=value)
+        )
+        
+    if params.get('first_name'):
+        value = params['first_name']
+        queryset = queryset.filter(
+            Q(contact_persons_details__first_name__exists=True) &
+            Q(contact_persons_details__first_name__ne="") &
+            Q(contact_persons_details__first_name__icontains=value)
+        )
+        
+    if params.get('last_name'):
+        value = params['last_name']
+        queryset = queryset.filter(
+            Q(contact_persons_details__last_name__exists=True) &
+            Q(contact_persons_details__last_name__ne="") &
+            Q(contact_persons_details__last_name__icontains=value)
+        )
+    if params.get('phone'):
+        value = params['phone']
+        queryset = queryset.filter(
+            Q(phone__exists=True, phone__ne="", phone__icontains=value) |
+            Q(mobile__exists=True, mobile__ne="", mobile__icontains=value) | 
+            Q(contact_persons_details__phone__exists=True, contact_persons_details__phone__ne="", contact_persons_details__phone__icontains=value) |
+            Q(contact_persons_details__mobile__exists=True, contact_persons_details__mobile__ne="", contact_persons_details__mobile__icontains=value)
+        )
+        
+    if params.get('email'):
+        value = params['email']
+        queryset = queryset.filter(
+            Q(email__exists=True, phone__ne="", phone__icontains=value) |
+            Q(contact_persons_details__email__exists=True, contact_persons_details__email__ne="", contact_persons_details__email__icontains=value)
+        )
+            
+    invoices_in_zoho_nws = list(queryset)
+    
+    return Response({
+        'count': len(invoices_in_zoho_nws),
+        'results': invoices_in_zoho_nws,
+    }, status=status.HTTP_200_OK)
+    
 
 # EXTRAS
 

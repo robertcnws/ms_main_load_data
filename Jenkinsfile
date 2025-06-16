@@ -11,15 +11,13 @@ pipeline {
   }
 
   environment {
-    AWS_ECR_REGISTRY            = "324037323031.dkr.ecr.us-east-2.amazonaws.com/nws"
-    BACKEND_IMAGE               = "${AWS_ECR_REGISTRY}/main-load-data"
-    BACKEND_IMAGE_TAG           = "${BACKEND_IMAGE}:latest"
-    BACKEND_CONTAINER_IMAGE     = "aws_ms_main_load_data"
-    BACKEND_CONTAINER_IMAGE_TAG = "${BACKEND_CONTAINER_IMAGE}:latest"
-    AWS_DEFAULT_REGION          = "us-east-2"
-    AWS_CLUSTER                 = "api-dealerportal-cluster"
-    AWS_BACKEND_SERVICE         = "main-load-data-service"
-    JENKINS_HOOK                = "main-load-data-repository-hook"
+    AWS_ECR_REGISTRY         = "324037323031.dkr.ecr.us-east-2.amazonaws.com/nws"
+    BACKEND_IMAGE            = "${AWS_ECR_REGISTRY}/main-load-data"
+    BACKEND_CONTAINER_IMAGE  = "aws_ms_main_load_data"
+    AWS_DEFAULT_REGION       = "us-east-2"
+    AWS_CLUSTER              = "api-dealerportal-cluster"
+    AWS_BACKEND_SERVICE      = "main-load-data-service"
+    JENKINS_HOOK             = "main-load-data-repository-hook"
   }
 
   stages {
@@ -84,7 +82,7 @@ pipeline {
         dir('app') {
           sh """
             docker-compose -f ../docker-compose.aws.backend.prod.yml build
-            docker tag "${JENKINS_HOOK}_${BACKEND_CONTAINER_IMAGE_TAG}" "${BACKEND_IMAGE_TAG}"
+            docker tag "${JENKINS_HOOK}_${BACKEND_CONTAINER_IMAGE}:latest" "${BACKEND_IMAGE}:latest"
             docker push "${BACKEND_IMAGE}:latest"
           """
         }
@@ -122,7 +120,7 @@ pipeline {
           credentialsId: 'aws-ecr-creds'
         ]]) {
           script {
-            def services = [env.AWS_BACKEND_SERVICE, env.AWS_FRONTEND_SERVICE]
+            def services = [env.AWS_BACKEND_SERVICE]
             services.each { svc ->
               echo "⏳ Waiting for ${svc} to complete deployment…"
               timeout(time: 10, unit: 'MINUTES') {
@@ -130,9 +128,9 @@ pipeline {
                   def state = sh(
                     script: """
                       docker run --rm \\
-                        -e AWS_ACCESS_KEY_ID \\
-                        -e AWS_SECRET_ACCESS_KEY \\
-                        -e AWS_DEFAULT_REGION \\
+                        -e AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID} \\
+                        -e AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY} \\
+                        -e AWS_DEFAULT_REGION=${env.AWS_DEFAULT_REGION} \\
                         amazon/aws-cli ecs describe-services \\
                           --cluster ${env.AWS_CLUSTER} \\
                           --services ${svc} \\
@@ -148,7 +146,7 @@ pipeline {
               }
               echo "✅ ${svc} deployment COMPLETED"
             }
-            echo "✅ Both deployments are COMPLETED"
+            echo "✅ All deployments are COMPLETED"
           }
         }
       }
