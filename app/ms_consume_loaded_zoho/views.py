@@ -584,19 +584,21 @@ def invoices_to_rewards_points(request):
         
     if params.get('first_name'):
         value = params['first_name']
-        queryset = queryset.filter(
-            Q(contact_persons_details__first_name__exists=True) &
-            Q(contact_persons_details__first_name__ne="") &
-            Q(contact_persons_details__first_name__icontains=value)
-        )
-        
+        regex = {"$regex": value, "$options": "i"}
+        queryset = queryset.filter(__raw__={
+            "contact_persons_details": {
+                "$elemMatch": {"first_name": regex}
+            }
+        })
+
     if params.get('last_name'):
         value = params['last_name']
-        queryset = queryset.filter(
-            Q(contact_persons_details__last_name__exists=True) &
-            Q(contact_persons_details__last_name__ne="") &
-            Q(contact_persons_details__last_name__icontains=value)
-        )
+        regex = {"$regex": value, "$options": "i"}
+        queryset = queryset.filter(__raw__={
+            "contact_persons_details": {
+                "$elemMatch": {"last_name": regex}
+            }
+        })
         
     if params.get('phone'):
         value = params['phone']
