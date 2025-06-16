@@ -578,7 +578,7 @@ def invoices_to_rewards_points(request):
     
     if params.get('status'):
         status_value = params['status'].lower()
-        if status_value in ['paid', 'unpaid', 'overdue']:
+        if status_value in ['paid', 'unpaid', 'overdue', 'sent', 'draft']:
             queryset = queryset.filter(status=status_value)
         else:
             return Response({'error': 'Invalid status value'}, status=status.HTTP_400_BAD_REQUEST) 
