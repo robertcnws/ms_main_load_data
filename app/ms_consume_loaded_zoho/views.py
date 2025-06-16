@@ -602,7 +602,7 @@ def invoices_to_rewards_points(request):
         value = params['phone']
         regex = {"$regex": value, "$options": "i"}
         
-        queryset = ZohoFullInvoice.objects(__raw__={
+        queryset = queryset.filter(__raw__={
             "$or": [
                 {"contact_persons_details": {
                     "$elemMatch": {"phone": regex}
@@ -617,7 +617,7 @@ def invoices_to_rewards_points(request):
         value = params['email']
         regex = {"$regex": value, "$options": "i"}
 
-        queryset = ZohoFullInvoice.objects(__raw__={
+        queryset = queryset.filter(__raw__={
             "$or": [
                 {"email": regex},
                 {"contact_persons_details": {
