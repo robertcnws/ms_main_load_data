@@ -574,18 +574,23 @@ def invoices_to_rewards_points(request):
 
     invoices_in_zoho_nws = []
         
-    queryset = ZohoFullInvoice.objects.all() 
+    queryset = ZohoFullInvoice.objects.all()
+    
+    if params.get('status'):
+        status_value = params['status'].lower()
+        if status_value in ['paid', 'unpaid', 'overdue']:
+            queryset = queryset.filter(status=status_value)
+        else:
+            return Response({'error': 'Invalid status value'}, status=status.HTTP_400_BAD_REQUEST) 
         
     if params.get('customer_name'):
-        value = params['customer_name']
-        value = value.strip()
+        value = params['customer_name'].strip()
         queryset = queryset.filter(
             Q(customer_name__exists=True, customer_name__ne="", customer_name__icontains=value)
         )
         
     if params.get('first_name'):
-        value = params['first_name']
-        value = value.strip()
+        value = params['first_name'].strip()
         regex = {"$regex": value, "$options": "i"}
         queryset = queryset.filter(__raw__={
             "contact_persons_details": {
@@ -594,8 +599,7 @@ def invoices_to_rewards_points(request):
         })
 
     if params.get('last_name'):
-        value = params['last_name']
-        value = value.strip()
+        value = params['last_name'].strip()
         regex = {"$regex": value, "$options": "i"}
         queryset = queryset.filter(__raw__={
             "contact_persons_details": {
@@ -604,8 +608,7 @@ def invoices_to_rewards_points(request):
         })
         
     if params.get('phone'):
-        value = params['phone']
-        value = value.strip()
+        value = params['phone'].strip()
         regex = {"$regex": value, "$options": "i"}
         
         queryset = queryset.filter(__raw__={
@@ -620,8 +623,7 @@ def invoices_to_rewards_points(request):
         })
         
     if params.get('email'):
-        value = params['email']
-        value = value.strip()
+        value = params['email'].strip()
         regex = {"$regex": value, "$options": "i"}
 
         queryset = queryset.filter(__raw__={
