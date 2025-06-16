@@ -578,12 +578,14 @@ def invoices_to_rewards_points(request):
         
     if params.get('customer_name'):
         value = params['customer_name']
+        value = value.strip()
         queryset = queryset.filter(
             Q(customer_name__exists=True, customer_name__ne="", customer_name__icontains=value)
         )
         
     if params.get('first_name'):
         value = params['first_name']
+        value = value.strip()
         regex = {"$regex": value, "$options": "i"}
         queryset = queryset.filter(__raw__={
             "contact_persons_details": {
@@ -593,6 +595,7 @@ def invoices_to_rewards_points(request):
 
     if params.get('last_name'):
         value = params['last_name']
+        value = value.strip()
         regex = {"$regex": value, "$options": "i"}
         queryset = queryset.filter(__raw__={
             "contact_persons_details": {
@@ -602,6 +605,7 @@ def invoices_to_rewards_points(request):
         
     if params.get('phone'):
         value = params['phone']
+        value = value.strip()
         regex = {"$regex": value, "$options": "i"}
         
         queryset = queryset.filter(__raw__={
@@ -617,6 +621,7 @@ def invoices_to_rewards_points(request):
         
     if params.get('email'):
         value = params['email']
+        value = value.strip()
         regex = {"$regex": value, "$options": "i"}
 
         queryset = queryset.filter(__raw__={
