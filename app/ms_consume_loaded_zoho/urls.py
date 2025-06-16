@@ -9,7 +9,6 @@ urlpatterns = [
     path("sales_orders/", views.sales_orders, name="sales_orders"),
     path("full_sales_orders/", views.full_sales_orders, name="full_sales_orders"),
     path("sales_orders_to_service/", views.sales_orders_to_service, name="sales_orders_to_service"),
-    path("invoices_to_rewards_points/", views.invoices_to_rewards_points, name="invoices_to_rewards_points"),
     path("refetch_salesorder/<str:zoho_org_id>/<str:salesorder_number>/", views.refetch_salesorder, name="refetch_salesorder"),
     path("packages/", views.packages, name="packages"),
     path("invoices/", views.invoices, name="invoices"),
