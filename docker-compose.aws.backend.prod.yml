@@ -1,5 +1,6 @@
 services:
   aws_ms_main_load_data:
+    image: main-load-data-repository-hook_aws_ms_main_load_data
     build:
       context: ./app
       dockerfile: Dockerfile.aws
