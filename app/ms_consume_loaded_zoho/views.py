@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 class CustomPagination(PageNumberPagination):
+    page_size = 100 
     page_size_query_param = 'page_size'
     max_page_size = 1000
 
@@ -63,26 +64,32 @@ def items(request):
     queryset = ZohoInventoryItem.objects.all() or []
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
+    
+    iterable = paginated_queryset if paginated_queryset is not None else queryset
 
     items_list = []
-    for doc in paginated_queryset:
+    for doc in iterable:
         doc_dict = doc.to_mongo().to_dict()
         if '_id' in doc_dict and isinstance(doc_dict['_id'], ObjectId):
             doc_dict['_id'] = str(doc_dict['_id'])
         items_list.append(doc_dict)
         
+    count = paginator.page.paginator.count if paginator.page else len(items_list)
+    number = paginator.page.number if paginator.page else 1
+    number_of_pages = paginator.page.paginator.num_pages if paginator.page else 1
+        
     logger.info(
         f'Items read: {len(items_list)}, '
-        f'paginated: {len(paginated_queryset)}, '
-        f'Count: {paginator.page.paginator.count}, '
-        f'Number: {paginator.page.number}, '
-        f'Number of pages: {paginator.page.paginator.num_pages}'
+        f'paginated: {len(iterable)}, '
+        f'Count: {count}, '
+        f'Number: {number}, '
+        f'Number of pages: {number_of_pages}'
     )
 
     return Response({
-        'count': paginator.page.paginator.count if paginator.page else len(items_list),
-        'next': paginator.get_next_link(),
-        'previous': paginator.get_previous_link(),
+        'count': count,
+        'next': paginator.get_next_link() if paginator.page else None,
+        'previous': paginator.get_previous_link() if paginator.page else None,
         'results': items_list,
     }, status=status.HTTP_200_OK)
     
