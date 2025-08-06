@@ -2,7 +2,7 @@ from rest_framework_mongoengine.viewsets import ModelViewSet
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from requests.adapters import HTTPAdapter, Retry
 from mongoengine import Q
-from datetime import datetime as dt, timezone as tz
+from datetime import datetime as dt, timezone as tz, timedelta
 from django.http import JsonResponse
 from django.utils import timezone
 from django.conf import settings
@@ -443,15 +443,21 @@ def load_inventory_sales_orders(request, zoho_org_id):
     except ValueError:
         return JsonResponse({'error': 'Invalid date format'}, status=400)
     
+    yesterday = dt.strptime(start_date, '%Y-%m-%d') - timedelta(days=1)
+            
+        
+    last_modified_time = yesterday.strftime('%Y-%m-%dT%H:%M:%S%z')
+    
     params = {
         'organization_id': app_config.zoho_org_id,
         'per_page': 200,
-        'page': 1
+        'page': 1,
+        'last_modified_time': last_modified_time,
     }
-    if end_date:
-        params.update({'date_start': start_date, 'date_end': end_date})
-    else:
-        params['date'] = start_date
+    # if end_date:
+    #     params.update({'date_start': start_date, 'date_end': end_date})
+    # else:
+    #     params['date'] = start_date
 
     url = settings.ZOHO_INVENTORY_SALESORDERS_URL
     items_to_get = []
@@ -1248,14 +1254,21 @@ def load_books_invoices(request, zoho_org_id):
         
         if not date_to_query:
             date_to_query = dt.today().strftime('%Y-%m-%d')
+            
+        
+        yesterday = dt.strptime(date_to_query, '%Y-%m-%d') - timedelta(days=1)
+            
+        
+        last_modified_time = yesterday.strftime('%Y-%m-%dT%H:%M:%S%z')
         
 
         params = {
             'organization_id': app_config.zoho_org_id,
             'page': 1,
             'per_page': 200,
-            'date_start': date_to_query,
-            'date_end': date_to_query
+            # 'date_start': date_to_query,
+            # 'date_end': date_to_query,
+            'last_modified_time': last_modified_time,
         }
         
         url = f'{settings.ZOHO_BOOKS_INVOICES_URL}'
