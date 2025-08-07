@@ -18,6 +18,7 @@ from mongoengine import (
                             FloatField,
                             ReferenceField,
                             EmailField,
+                            NULLIFY
                         )
 from mongoengine import fields
 
@@ -310,7 +311,11 @@ class ZohoPackage(Document):
     template_name = StringField(max_length=255, null=True)
     template_type = StringField(max_length=255, null=True)
     
-    zoho_shipment = ReferenceField('ZohoShipmentOrder', null=True)
+    zoho_shipment = ReferenceField(
+        'ZohoShipmentOrder',
+        dbref=False,             
+        reverse_delete_rule=NULLIFY
+    )
     
     zoho_org_id = StringField(max_length=255, null=True)
 

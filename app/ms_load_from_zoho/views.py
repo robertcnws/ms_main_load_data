@@ -975,7 +975,7 @@ def load_inventory_shipments(request, zoho_org_id):
                     obj.template_id = package.template_id
                     obj.template_name = package.template_name
                     obj.template_type = package.template_type
-                    obj.zoho_shipment = package.zoho_shipment
+                    obj.zoho_shipment = package.zoho_shipment if package.zoho_shipment else None
                     obj.zoho_org_id = zoho_org_id
                     obj.save()
                     
