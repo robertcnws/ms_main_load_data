@@ -2,6 +2,7 @@ from rest_framework_mongoengine.viewsets import ModelViewSet
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from requests.adapters import HTTPAdapter, Retry
 from mongoengine import Q
+from mongoengine.errors import DoesNotExist as MongoDoesNotExist
 from datetime import datetime as dt, timezone as tz, timedelta
 from django.http import JsonResponse
 from django.utils import timezone
@@ -979,7 +980,12 @@ def load_inventory_shipments(request, zoho_org_id):
                     obj.template_id = package.template_id
                     obj.template_name = package.template_name
                     obj.template_type = package.template_type
-                    obj.zoho_shipment = package.zoho_shipment if package.zoho_shipment else None
+                    try:
+                        shipment_ref = package.zoho_shipment 
+                    except MongoDoesNotExist:
+                        shipment_ref = None
+
+                    obj.zoho_shipment = shipment_ref
                     obj.zoho_org_id = zoho_org_id
                     obj.save()
                     
