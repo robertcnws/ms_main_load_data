@@ -316,11 +316,12 @@ class ZohoPackage(Document):
 
     meta = {
         'collection': 'zoho_package',
+        'auto_create_index': False,
         'indexes': [
-            'package_id', 'package_number'
+            'package_number',
         ],
         'verbose_name': 'Zoho Inventory Package',
-        'verbose_name_plural': 'Zoho Inventory Package'
+        'verbose_name_plural': 'Zoho Inventory Package',
     }
 
     def __str__(self):
