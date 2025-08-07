@@ -247,8 +247,9 @@ class ZohoShipmentOrder(Document):
 
     meta = {
         'collection': 'zoho_shipment_order',
+        'auto_create_index': False,
         'indexes': [
-            'shipment_id', 'shipment_number'
+            'shipment_number'
         ],
         'verbose_name': 'Zoho Inventory Shipment',
         'verbose_name_plural': 'Zoho Inventory Shipment'

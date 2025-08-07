@@ -821,8 +821,12 @@ def load_inventory_shipments(request, zoho_org_id):
             new_packages.append(new_pkg)
     
     shipments_ids = [item['shipment_id'] for item in full_items_to_get if item.get('shipment_id')]
-    existing_shipments = ZohoShipmentOrder.objects(Q(shipment_id__in=shipments_ids))
-    existing_shipments_ids = set(existing_shipments.distinct('shipment_id'))
+    
+    if shipments_ids:
+        existing_shipments = ZohoShipmentOrder.objects(Q(shipment_id__in=shipments_ids))
+        existing_shipments_ids = set(existing_shipments.distinct('shipment_id'))
+    else:
+        existing_shipments_ids = set()
 
     new_shipments = []
     shipments_to_update = []
