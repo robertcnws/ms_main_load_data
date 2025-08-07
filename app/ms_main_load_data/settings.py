@@ -54,10 +54,13 @@ LOGGING = {
             'filename': '/var/log/celery.log',
             'formatter': 'verbose',
         },
+        'null': {
+            'class': 'logging.NullHandler',
+        },
     },
     'formatters': {
         'verbose': {
-            'format': '%(asctime)s %(levelname)s %(message)s'
+            'format': '%(asctime)s %(levelname)s %(name)s %(message)s'
         },
     },
     'loggers': {
@@ -71,14 +74,28 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': True,
         },
-        'pymongo.topology': {
+        'pymongo': {
+            'handlers': ['file'],     
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'pymongo.command': {
             'handlers': ['file'],
-            'level': 'WARNING', 
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'pymongo.connection': {
+            'handlers': ['file'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'pymongo.serverSelection': {
+            'handlers': ['file'],
+            'level': 'WARNING',
             'propagate': False,
         },
     },
 }
-
 
 
 ALLOWED_HOSTS = ['*']
