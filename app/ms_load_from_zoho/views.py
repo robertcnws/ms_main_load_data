@@ -803,16 +803,21 @@ def load_inventory_shipments(request, zoho_org_id):
             except Exception as exc:
                 logger.error(f"Error fetching package {pkg_id}: {exc}")
     
-    existing_packages = ZohoPackage.objects(Q(package_id__in=all_package_ids))
-    existing_packages_ids = set(existing_packages.distinct('package_id'))
+    if all_package_ids:
+        existing_packages = ZohoPackage.objects(package_id__in=all_package_ids)
+        existing_packages_ids = set(existing_packages.distinct('package_id'))
+    else:
+        existing_packages_ids = set()
     
     new_packages = []
     packages_to_update = []
     for pkg_data in all_packages_data:
-        new_pkg = create_inventory_package_instance(logger, pkg_data, zoho_org_id=zoho_org_id)
-        if new_pkg and new_pkg.package_id in existing_packages_ids:
+        new_pkg = create_inventory_package_instance(logger, pkg_data, zoho_org_id)
+        if not new_pkg:
+            continue
+        if new_pkg.package_id in existing_packages_ids:
             packages_to_update.append(new_pkg)
-        elif new_pkg:
+        else:
             new_packages.append(new_pkg)
     
     shipments_ids = [item['shipment_id'] for item in full_items_to_get if item.get('shipment_id')]
