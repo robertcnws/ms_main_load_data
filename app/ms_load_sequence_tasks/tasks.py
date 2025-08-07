@@ -30,8 +30,9 @@ def task_sequence_by_zoho_sales():
     
     workflow = chain(
         task_load_inventory_shipments.si(),
-        task_load_inventory_sales_orders.si().set(countdown=settings.CELERY_TASKS_DELAY),
-        task_load_books_invoices.si().set(countdown=settings.CELERY_TASKS_DELAY),
+        task_load_inventory_sales_orders.si(),
+        # task_load_inventory_sales_orders.si().set(countdown=settings.CELERY_TASKS_DELAY),
+        task_load_books_invoices.si()
     )
     workflow.apply_async()
     
@@ -48,7 +49,7 @@ def task_sequence_by_customers_items():
     
     workflow = chain(
         task_load_books_customers.si(),
-        task_load_inventory_items.si().set(countdown=settings.CELERY_TASKS_DELAY),
+        task_load_inventory_items.si(),
         # task_load_books_customers_details.si().set(countdown=settings.CELERY_TASKS_DELAY),
     )
     workflow.apply_async()
@@ -66,7 +67,7 @@ def task_sequence_by_senitron():
     
     workflow = chain(
         task_load_senitron_items_assets.si(),
-        task_load_senitron_items_assets_logs.si().set(countdown=settings.CELERY_TASKS_DELAY),
+        task_load_senitron_items_assets_logs.si(),
     )
     workflow.apply_async()
     
