@@ -446,7 +446,6 @@ def full_sales_orders(request):
         'results': list,
     }, status=status.HTTP_200_OK)
     
-    
 
 @api_view(['GET'])
 @authentication_classes([MongoTokenAuthentication])
@@ -474,6 +473,7 @@ def sales_orders_to_service(request):
     params = request.query_params.dict()
     is_recent = params.get('is_recent', 'false').lower() == 'true'
     salesorder_number = params.get('salesorder_number')
+    last_modified_time = params.get('last_modified_time', None)
 
     sales_orders_in_zoho_nws = []
     sales_orders_in_zoho_nwshome = []
@@ -552,6 +552,14 @@ def sales_orders_to_service(request):
     
     if salesorder_number:
         sales_orders = [so for so in sales_orders if so.get('salesorder_number') == salesorder_number]
+        
+    if last_modified_time:
+        try:
+            last_modified_time = dt.strptime(last_modified_time, '%Y-%m-%dT%H:%M:%S.%fZ')
+            sales_orders = [so for so in sales_orders if so.get('last_modified_time') and dt.strptime(so['last_modified_time'], '%Y-%m-%dT%H:%M:%S.%fZ') >= last_modified_time]
+        except ValueError:
+            logger.error('Invalid last_modified_time format')
+            return Response({'error': 'Invalid last_modified_time format'}, status=status.HTTP_400_BAD_REQUEST)
     
     return Response({
         'count': len(sales_orders),
@@ -641,6 +649,14 @@ def invoices_to_rewards_points(request):
                 }}
             ]
         })
+        
+    if params.get('last_modified_time'):
+        try:
+            last_modified_time = dt.strptime(params['last_modified_time'], '%Y-%m-%dT%H:%M:%S.%fZ')
+            queryset = queryset.filter(last_modified_time__gte=last_modified_time)
+        except ValueError:
+            logger.error('Invalid last_modified_time format')
+            return Response({'error': 'Invalid last_modified_time format'}, status=status.HTTP_400_BAD_REQUEST)
             
     invoices_in_zoho_nws = list(queryset)
     
