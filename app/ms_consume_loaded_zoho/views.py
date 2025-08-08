@@ -7,7 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from bson.objectid import ObjectId
-from datetime import datetime as dt
+from datetime import datetime as dt, timezone as dt_timezone
+from django.utils.dateparse import parse_datetime
 from ms_app_manage_auth.authentication import MongoTokenAuthentication
 from django.conf import settings
 from django.http import JsonResponse
@@ -554,9 +555,15 @@ def sales_orders_to_service(request):
         sales_orders = [so for so in sales_orders if so.get('salesorder_number') == salesorder_number]
         
     if last_modified_time:
+        cutoff = to_dt(last_modified_time)
+        if cutoff is None:
+            logger.error('Invalid last_modified_time format on cutoff')
+            return Response({'error': 'Invalid last_modified_time format'}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            last_modified_time = dt.strptime(last_modified_time, '%Y-%m-%dT%H:%M:%S.%fZ')
-            sales_orders = [so for so in sales_orders if so.get('last_modified_time') and dt.strptime(so['last_modified_time'], '%Y-%m-%dT%H:%M:%S.%fZ') >= last_modified_time]
+            sales_orders = [
+                so for so in sales_orders
+                if (d := to_dt(so.get('last_modified_time'))) and d >= cutoff
+            ]
         except ValueError:
             logger.error('Invalid last_modified_time format')
             return Response({'error': 'Invalid last_modified_time format'}, status=status.HTTP_400_BAD_REQUEST)
@@ -650,13 +657,27 @@ def invoices_to_rewards_points(request):
             ]
         })
         
-    if params.get('last_modified_time'):
+    s = params.get('last_modified_time')
+    if s:
+        s_norm = s.replace('Z', '+00:00')
+
+        last_modified_time = None
         try:
-            last_modified_time = dt.strptime(params['last_modified_time'], '%Y-%m-%dT%H:%M:%S.%fZ')
-            queryset = queryset.filter(last_modified_time__gte=last_modified_time)
+            # Soporta: 2025-08-07T00:00:00.000+00:00
+            last_modified_time = dt.fromisoformat(s_norm)
         except ValueError:
+            # Fallback a parser de Django (también soporta varios formatos ISO)
+            last_modified_time = parse_datetime(s)
+
+        if not last_modified_time:
             logger.error('Invalid last_modified_time format')
             return Response({'error': 'Invalid last_modified_time format'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # asegúrate de que sea "aware"
+        if last_modified_time.tzinfo is None:
+            last_modified_time = last_modified_time.replace(tzinfo=dt_timezone.utc)
+
+        queryset = queryset.filter(last_modified_time__gte=last_modified_time)
             
     invoices_in_zoho_nws = list(queryset)
     
@@ -723,3 +744,19 @@ def load_inventory_sales_orders_by(zoho_org_id, param):
                 
     
     return full_items_to_get
+
+
+def to_dt(value):
+    """Convierte str/naive dt/aware dt a datetime aware (UTC). Devuelve None si no se puede."""
+    if not value:
+        return None
+    if isinstance(value, dt):
+        return value if value.tzinfo else value.replace(tzinfo=dt_timezone.utc)
+    s = str(value).replace('Z', '+00:00')
+    try:
+        d = dt.fromisoformat(s)   # Soporta offsets y microsegundos opcionales
+    except ValueError:
+        d = parse_datetime(value)       # Fallback: acepta varios ISO-8601, incl. 'Z'
+    if not d:
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=dt_timezone.utc)
