@@ -444,7 +444,7 @@ def load_inventory_sales_orders(request, zoho_org_id):
     except ValueError:
         return JsonResponse({'error': 'Invalid date format'}, status=400)
     
-    yesterday = dt.strptime(start_date, '%Y-%m-%d') - timedelta(days=2)
+    yesterday = dt.strptime(start_date, '%Y-%m-%d') - timedelta(days=0)
             
         
     last_modified_time = yesterday.strftime('%Y-%m-%d')
@@ -1272,7 +1272,7 @@ def load_books_invoices(request, zoho_org_id):
             date_to_query = dt.today().strftime('%Y-%m-%d')
             
         
-        yesterday = dt.strptime(date_to_query, '%Y-%m-%d') - timedelta(days=2)
+        yesterday = dt.strptime(date_to_query, '%Y-%m-%d') - timedelta(days=0)
         
         last_modified_time = yesterday.strftime('%Y-%m-%d')
         last_modified_time += 'T00:00:00+0000'
