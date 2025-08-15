@@ -34,6 +34,7 @@ from .utils import (
 
 import logging
 import requests
+import re
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -630,19 +631,19 @@ def invoices_to_rewards_points(request):
         })
         
     if params.get('phone'):
-        value = params['phone'].strip()
-        regex = {"$regex": value, "$options": "i"}
-        
-        queryset = queryset.filter(__raw__={
-            "$or": [
-                {"contact_persons_details": {
-                    "$elemMatch": {"phone": regex}
-                }},
-                {"contact_persons_details": {
-                    "$elemMatch": {"mobile": regex}
-                }}
-            ]
-        })
+        pattern = build_phone_regex(params['phone'])
+        if pattern:
+            regex = {"$regex": pattern, "$options": "i"}
+            queryset = queryset.filter(__raw__={
+                "contact_persons_details": {
+                    "$elemMatch": {
+                        "$or": [
+                            {"phone":  regex},
+                            {"mobile": regex},
+                        ]
+                    }
+                }
+            })
         
     if params.get('email'):
         value = params['email'].strip()
@@ -693,6 +694,14 @@ def invoices_to_rewards_points(request):
     
 
 # EXTRAS
+
+def build_phone_regex(value: str) -> str | None:
+    digits = re.sub(r'\D+', '', (value or '').strip())
+    if not digits:
+        return None
+    # Inserta \D* entre cada dígito y limita a bordes de dígitos para evitar falsos positivos
+    core = r'\D*'.join(map(re.escape, digits))
+    return rf'(?<!\d){core}(?!\d)'
 
 def load_inventory_sales_orders_by(zoho_org_id, param):
     MAX_WORKERS = 10
