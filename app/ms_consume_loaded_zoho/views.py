@@ -476,6 +476,7 @@ def sales_orders_to_service(request):
     is_recent = params.get('is_recent', 'false').lower() == 'true'
     salesorder_number = params.get('salesorder_number')
     last_modified_time = params.get('last_modified_time', None)
+    date = params.get('date', None)
 
     sales_orders_in_zoho_nws = []
     sales_orders_in_zoho_nwshome = []
@@ -486,6 +487,21 @@ def sales_orders_to_service(request):
         if not is_recent:
             sales_orders_in_zoho_nws = load_inventory_sales_orders_by(settings.ZOHO_ORG_ID, param=salesorder_number)
             sales_orders_in_zoho_nwshome = load_inventory_sales_orders_by(settings.ZOHO_ORG_ID_NWSHOME, param=salesorder_number)
+    
+    elif date:
+        try:
+            date = dt.strptime(date, '%Y-%m-%d')
+        except ValueError:
+            logger.error('Invalid date format')
+            return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+        start_of_day = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = date.replace(hour=23, minute=59, second=59, microsecond=999999)
+        queryset = ZohoInventoryShipmentSalesOrder.objects(date__gte=start_of_day, date__lte=end_of_day)
+        sales_orders = [transform_data_to_mongo(so) for so in queryset]
+        if not is_recent:
+            sales_orders_in_zoho_nws = load_inventory_sales_orders_by(settings.ZOHO_ORG_ID, param=None)
+            sales_orders_in_zoho_nwshome = load_inventory_sales_orders_by(settings.ZOHO_ORG_ID_NWSHOME, param=None)
+    
     else:
         queryset = ZohoCustomer.objects.all() 
         if params.get('company_name'):
