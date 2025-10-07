@@ -724,7 +724,11 @@ def load_inventory_sales_orders_to_qbwc(request, zoho_org_id):
         futures = [executor.submit(fetch_sales_order_details, item, session, headers, zoho_org_id) for item in items_to_get]
         full_items_to_get = [future.result() for future in as_completed(futures) if future.result()]
 
-    return JsonResponse({'message': 'Sales Orders loaded successfully to QBWC', 'data': full_items_to_get}, status=200)
+    return JsonResponse({
+        'message': 'Sales Orders loaded successfully to QBWC', 
+        'count': len(full_items_to_get),
+        'data': full_items_to_get
+    }, status=200)
 
 
 #############################################
