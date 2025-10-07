@@ -661,6 +661,72 @@ def load_inventory_sales_orders_by_customer_name(request, zoho_org_id):
     return JsonResponse({'message': 'Sales Orders loaded successfully'}, status=200)
 
 
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def load_inventory_sales_orders_to_qbwc(request, zoho_org_id):
+    MAX_WORKERS = 10
+    app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
+    logger.info(f'App Config: {app_config}')
+    try:
+        headers = config_headers(zoho_org_id)
+    except Exception as e:
+        logger.error(f"Error connecting to Zoho API: {str(e)}")
+        return JsonResponse({'error': f"Error connecting to Zoho API (Load Items): {str(e)}"}, status=500)
+
+    data = json.loads(request.body if request.body else '{}')
+    date = data.get('date', None)
+
+    if not date:
+        return JsonResponse({'error': 'Date is required'}, status=400)
+
+    try:
+        dt.strptime(date, '%Y-%m-%d')
+    except ValueError:
+        return JsonResponse({'error': 'Invalid date format'}, status=400)
+            
+        
+    # last_modified_time = yesterday.strftime('%Y-%m-%d')
+    # last_modified_time += 'T00:00:00+0000'  
+    
+    params = {
+        'organization_id': app_config.zoho_org_id,
+        'per_page': 200,
+        'page': 1,
+        'date': date,
+    }
+    # if end_date:
+    #     params.update({'date_start': start_date, 'date_end': end_date})
+    # else:
+    #     params['date'] = start_date
+
+    url = settings.ZOHO_INVENTORY_SALESORDERS_URL
+    items_to_get = []
+    session = requests.Session()
+
+    while True:
+        try:
+            response = session.get(url, headers=headers, params=params)
+            if response.status_code == 401:
+                new_token = refresh_zoho_access_token(zoho_org_id)
+                headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
+                response = session.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            items = response.json()
+            items_to_get.extend(items.get('salesorders', []))
+            if not items.get('page_context', {}).get('has_more_page', False):
+                break
+            params['page'] += 1
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching sales orders: {e}")
+            return JsonResponse({'error': 'Failed to fetch sales orders'}, status=500)
+    
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [executor.submit(fetch_sales_order_details, item, session, headers, zoho_org_id) for item in items_to_get]
+        full_items_to_get = [future.result() for future in as_completed(futures) if future.result()]
+
+    return JsonResponse({'message': 'Sales Orders loaded successfully to QBWC', 'data': full_items_to_get}, status=200)
+
+
 #############################################
 # LOAD SHIPMENTS AND PACKAGES
 #############################################

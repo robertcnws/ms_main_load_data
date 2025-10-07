@@ -15,4 +15,5 @@ urlpatterns = [
     path("load_invoices/customer/<str:zoho_org_id>/", views.load_books_invoices_by_customer_name, name="load_books_invoices_by_customer_name"),
     path("load_sales_orders/customer/<str:zoho_org_id>/", views.load_inventory_sales_orders_by_customer_name, name="load_inventory_sales_orders_by_customer_name"),
     path("load_sales_orders/<str:zoho_org_id>/", views.load_inventory_sales_orders, name="load_inventory_sales_orders"),
+    path("load_sales_orders_to_qbwc/<str:zoho_org_id>/", views.load_inventory_sales_orders_to_qbwc, name="load_inventory_sales_orders_to_qbwc"),
 ]
