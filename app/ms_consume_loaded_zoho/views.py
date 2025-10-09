@@ -622,44 +622,46 @@ def invoices_to_rewards_points(request):
         else:
             return Response({'error': 'Invalid status value'}, status=status.HTTP_400_BAD_REQUEST) 
         
-    if params.get('customer_name'):
-        value = params['customer_name'].strip()
-        queryset = queryset.filter(
-            Q(customer_name__exists=True, customer_name__ne="", customer_name__icontains=value)
-        )
+    # if params.get('customer_name'):
+    #     value = params['customer_name'].strip()
+    #     queryset = queryset.filter(
+    #         Q(customer_name__exists=True, customer_name__ne="", customer_name__icontains=value)
+    #     )
         
-    if params.get('first_name'):
-        value = params['first_name'].strip()
-        regex = {"$regex": value, "$options": "i"}
-        queryset = queryset.filter(__raw__={
-            "contact_persons_details": {
-                "$elemMatch": {"first_name": regex}
-            }
-        })
+    # if params.get('first_name'):
+    #     value = params['first_name'].strip()
+    #     regex = {"$regex": value, "$options": "i"}
+    #     queryset = queryset.filter(__raw__={
+    #         "contact_persons_details": {
+    #             "$elemMatch": {"first_name": regex}
+    #         }
+    #     })
 
-    if params.get('last_name'):
-        value = params['last_name'].strip()
-        regex = {"$regex": value, "$options": "i"}
-        queryset = queryset.filter(__raw__={
-            "contact_persons_details": {
-                "$elemMatch": {"last_name": regex}
-            }
-        })
+    # if params.get('last_name'):
+    #     value = params['last_name'].strip()
+    #     regex = {"$regex": value, "$options": "i"}
+    #     queryset = queryset.filter(__raw__={
+    #         "contact_persons_details": {
+    #             "$elemMatch": {"last_name": regex}
+    #         }
+    #     })
         
-    if params.get('phone'):
-        pattern = build_phone_regex(params['phone'])
-        if pattern:
-            regex = {"$regex": pattern, "$options": "i"}
-            queryset = queryset.filter(__raw__={
-                "contact_persons_details": {
-                    "$elemMatch": {
-                        "$or": [
-                            {"phone":  regex},
-                            {"mobile": regex},
-                        ]
-                    }
-                }
-            })
+    # if params.get('phone'):
+    #     pattern = build_phone_regex(params['phone'])
+    #     if pattern:
+    #         regex = {"$regex": pattern, "$options": "i"}
+    #         queryset = queryset.filter(__raw__={
+    #             "contact_persons_details": {
+    #                 "$elemMatch": {
+    #                     "$or": [
+    #                         {"phone":  regex},
+    #                         {"mobile": regex},
+    #                     ]
+    #                 }
+    #             }
+    #         })
+    
+    is_email_synced = False
         
     if params.get('email'):
         value = params['email'].strip()
@@ -673,7 +675,17 @@ def invoices_to_rewards_points(request):
                 }}
             ]
         })
-        
+        if queryset.count() > 0:
+            is_email_synced = True
+        else:
+            customers = ZohoCustomer.objects(__raw__={
+                "$or": [
+                    {"email": regex}
+                ]
+            })
+            if customers.count() > 0:
+                is_email_synced = True
+                
     s = params.get('last_modified_time')
     if s:
         s_norm = s.replace('Z', '+00:00')
@@ -705,6 +717,7 @@ def invoices_to_rewards_points(request):
     
     return Response({
         'count': len(invoices_in_zoho_nws),
+        'is_email_synced': is_email_synced,
         'results': invoices_in_zoho_nws,
     }, status=status.HTTP_200_OK)
     
