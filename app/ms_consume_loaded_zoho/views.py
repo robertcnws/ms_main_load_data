@@ -63,7 +63,30 @@ def secure_endpoint(request):
 @authentication_classes([MongoTokenAuthentication])
 @permission_classes([IsAuthenticated])
 def items(request):
-    queryset = ZohoInventoryItem.objects.all() or []
+    params = request.query_params.dict()
+    start_last_modified_time = params.get('start_last_modified_time', None)
+    end_last_modified_time = params.get('end_last_modified_time', None)
+    
+    try:
+        if start_last_modified_time:
+            start_last_modified_time = dt.strptime(start_last_modified_time, '%Y-%m-%d')
+        if end_last_modified_time:
+            end_last_modified_time = dt.strptime(end_last_modified_time, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+    except ValueError:
+        logger.error('Invalid date format')
+        return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+    if start_last_modified_time and end_last_modified_time:
+        if start_last_modified_time > end_last_modified_time:
+            logger.error(f'Invalid date range: [{start_last_modified_time} - {end_last_modified_time}]')
+            return Response({'error': 'Invalid date range'}, status=status.HTTP_400_BAD_REQUEST)
+        queryset = ZohoInventoryItem.objects(last_modified_time__gte=start_last_modified_time, last_modified_time__lte=end_last_modified_time)
+    elif start_last_modified_time and not end_last_modified_time:
+        queryset = ZohoInventoryItem.objects(last_modified_time__gte=start_last_modified_time)
+    elif end_last_modified_time and not start_last_modified_time:
+        queryset = ZohoInventoryItem.objects(last_modified_time__lte=end_last_modified_time)
+    else:
+        queryset = ZohoInventoryItem.objects.all()
+    # queryset = ZohoInventoryItem.objects.all() or []
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
     
