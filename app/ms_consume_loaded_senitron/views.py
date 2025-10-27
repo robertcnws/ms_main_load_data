@@ -31,11 +31,16 @@ def item_assets(request):
     
     item_numbers = data.get('item_numbers', None)
     
+    only_fields = data.get('only_fields', None)
+    
     if item_numbers:
         item_numbers = item_numbers.split(',')
         queryset = SenitronItemAsset.objects(item_number__in=item_numbers)
     else:
         queryset = SenitronItemAsset.objects.all()
+    if only_fields:
+        only_fields_list = [field.strip() for field in only_fields.split(',')]
+        queryset = queryset.only(*only_fields_list)
     
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
@@ -78,12 +83,17 @@ def item_assets_logs(request):
     data = request.query_params.dict()
     
     item_numbers = data.get('item_numbers', None)
-    
+
+    only_fields = data.get('only_fields', None)
+
     if item_numbers:
         item_numbers = item_numbers.split(',')
         queryset = SenitronItemAssetLogs.objects(item_number__in=item_numbers)
     else:
         queryset = SenitronItemAssetLogs.objects.all()
+    if only_fields:
+        only_fields_list = [field.strip() for field in only_fields.split(',')]
+        queryset = queryset.only(*only_fields_list)
     
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)

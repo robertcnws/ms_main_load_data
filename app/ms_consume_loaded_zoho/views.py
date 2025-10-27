@@ -66,6 +66,7 @@ def items(request):
     params = request.query_params.dict()
     start_last_modified_time = params.get('start_last_modified_time', None)
     end_last_modified_time = params.get('end_last_modified_time', None)
+    only_fields = params.get('only_fields', None)
     
     try:
         if start_last_modified_time:
@@ -86,6 +87,9 @@ def items(request):
         queryset = ZohoInventoryItem.objects(last_modified_time__lte=end_last_modified_time)
     else:
         queryset = ZohoInventoryItem.objects.all()
+    if only_fields:
+        only_fields_list = [field.strip() for field in only_fields.split(',')]
+        queryset = queryset.only(*only_fields_list)
     # queryset = ZohoInventoryItem.objects.all() or []
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
@@ -140,6 +144,10 @@ def customers(request):
         queryset = queryset.filter(email__icontains=params['email'])
     if params.get('zoho_org_id'):
         queryset = queryset.filter(zoho_org_id=params['zoho_org_id'])
+    if params.get('only_fields'):
+        only_fields = params.get('only_fields')
+        only_fields_list = [field.strip() for field in only_fields.split(',')]
+        queryset = queryset.only(*only_fields_list)
         
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
@@ -177,6 +185,7 @@ def shipment_orders(request):
     
     start_date = data.get('start_date', None)
     end_date = data.get('end_date', None)
+    only_fields = data.get('only_fields', None)
     
     try:
         if start_date:
@@ -198,6 +207,9 @@ def shipment_orders(request):
         queryset = ZohoShipmentOrder.objects(date__lte=end_date)
     else:
         queryset = ZohoShipmentOrder.objects.all()
+    if only_fields:
+        only_fields_list = [field.strip() for field in only_fields.split(',')]
+        queryset = queryset.only(*only_fields_list)
     
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
@@ -234,12 +246,17 @@ def packages(request):
     data = request.query_params.dict()
     
     shipment_ids = data.get('shipment_ids', None)
-    
+
+    only_fields = data.get('only_fields', None)
+
     if shipment_ids:
         shipment_ids = shipment_ids.split(',')
         queryset = ZohoPackage.objects(shipment_id__in=shipment_ids)
     else:
         queryset = ZohoPackage.objects.all()
+    if only_fields:
+        only_fields_list = [field.strip() for field in only_fields.split(',')]
+        queryset = queryset.only(*only_fields_list)
     
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
@@ -277,6 +294,7 @@ def invoices(request):
     
     start_date = data.get('start_date', None)
     end_date = data.get('end_date', None)
+    only_fields = data.get('only_fields', None)
     
     try:
         if start_date:
@@ -298,6 +316,9 @@ def invoices(request):
         queryset = ZohoFullInvoice.objects(date__lte=end_date)
     else:
         queryset = ZohoFullInvoice.objects.all()
+    if only_fields:
+        only_fields_list = [field.strip() for field in only_fields.split(',')]
+        queryset = queryset.only(*only_fields_list)
     
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
@@ -338,6 +359,7 @@ def sales_orders(request):
     
     sales_orders_ids = data.get('sales_orders_ids', None)
     not_sales_orders_ids = data.get('not_sales_orders_ids', None)
+    only_fields = data.get('only_fields', None)
     
     try:
         if start_date:
@@ -367,6 +389,10 @@ def sales_orders(request):
         queryset = [doc for doc in queryset if doc.salesorder_id not in not_sales_orders_ids]
     if installation_name:
         queryset = [doc for doc in queryset for item in doc.line_items if installation_name.lower() in item.get('name', '').lower()]
+        
+    if only_fields:
+        only_fields_list = [field.strip() for field in only_fields.split(',')]
+        queryset = [doc.only(*only_fields_list) for doc in queryset]
     
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
@@ -406,7 +432,8 @@ def full_sales_orders(request):
     installation_name = data.get('installation_name', None)
     sales_orders_ids = data.get('sales_orders_ids', None)
     not_sales_orders_ids = data.get('not_sales_orders_ids', None)
-    
+    only_fields = data.get('only_fields', None)
+
     try:
         if start_date:
             start_date = dt.strptime(start_date, '%Y-%m-%d')
@@ -436,6 +463,10 @@ def full_sales_orders(request):
     if installation_name:
         queryset = [doc for doc in queryset for item in doc.line_items if installation_name.lower() in item.get('name', '').lower()]
     
+    if only_fields:
+        only_fields_list = [field.strip() for field in only_fields.split(',')]
+        queryset = [doc.only(*only_fields_list) for doc in queryset]
+        
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
 
@@ -500,6 +531,7 @@ def sales_orders_to_service(request):
     salesorder_number = params.get('salesorder_number')
     last_modified_time = params.get('last_modified_time', None)
     date = params.get('date', None)
+    only_fields = params.get('only_fields', None)
 
     sales_orders_in_zoho_nws = []
     sales_orders_in_zoho_nwshome = []
@@ -608,6 +640,14 @@ def sales_orders_to_service(request):
             logger.error('Invalid last_modified_time format')
             return Response({'error': 'Invalid last_modified_time format'}, status=status.HTTP_400_BAD_REQUEST)
     
+    if only_fields:
+        only_fields_list = [field.strip() for field in only_fields.split(',')]
+        filtered_sales_orders = []
+        for so in sales_orders:
+            filtered_so = {field: so.get(field) for field in only_fields_list if field in so}
+            filtered_sales_orders.append(filtered_so)
+        sales_orders = filtered_sales_orders
+        
     return Response({
         'count': len(sales_orders),
         'results': sales_orders,
@@ -737,6 +777,15 @@ def invoices_to_rewards_points(request):
         transform_data_to_mongo(invoice) for invoice in invoices_in_zoho_nws \
         if invoice.zoho_org_id == settings.ZOHO_ORG_ID
     ]
+    
+    only_fields = params.get('only_fields', None)
+    if only_fields:
+        only_fields_list = [field.strip() for field in only_fields.split(',')]
+        filtered_invoices = []
+        for invoice in invoices_in_zoho_nws:
+            filtered_invoice = {field: invoice.get(field) for field in only_fields_list if field in invoice}
+            filtered_invoices.append(filtered_invoice)
+        invoices_in_zoho_nws = filtered_invoices
     
     return Response({
         'count': len(invoices_in_zoho_nws),
