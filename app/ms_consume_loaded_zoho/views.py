@@ -148,6 +148,24 @@ def customers(request):
         queryset = queryset.filter(email__icontains=params['email'])
     if params.get('zoho_org_id'):
         queryset = queryset.filter(zoho_org_id=params['zoho_org_id'])
+    
+    
+    start_last_modified_time = params.get('start_last_modified_time', None)
+    end_last_modified_time = params.get('end_last_modified_time', None)
+    
+    try:
+        if start_last_modified_time:
+            start_last_modified_time = dt.strptime(start_last_modified_time, '%Y-%m-%d')
+        if end_last_modified_time:
+            end_last_modified_time = dt.strptime(end_last_modified_time, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+    except ValueError:
+        logger.error('Invalid date format')
+        return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+    if start_last_modified_time and end_last_modified_time:
+        if start_last_modified_time > end_last_modified_time:
+            logger.error(f'Invalid date range: [{start_last_modified_time} - {end_last_modified_time}]')
+            return Response({'error': 'Invalid date range'}, status=status.HTTP_400_BAD_REQUEST)
+        queryset = queryset.filter(last_modified_time__gte=start_last_modified_time, last_modified_time__lte=end_last_modified_time)
         
     only_fields = params.get('only_fields', None)
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoCustomer)
@@ -189,6 +207,8 @@ def shipment_orders(request):
     
     data = request.query_params.dict()
     
+    queryset = ZohoShipmentOrder.objects.all()
+    
     start_date = data.get('start_date', None)
     end_date = data.get('end_date', None)
     only_fields = data.get('only_fields', None)
@@ -202,17 +222,33 @@ def shipment_orders(request):
         logger.error('Invalid date format')
         return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
     
+    start_last_modified_time = data.get('start_last_modified_time', None)
+    end_last_modified_time = data.get('end_last_modified_time', None)
+    
+    try:
+        if start_last_modified_time:
+            start_last_modified_time = dt.strptime(start_last_modified_time, '%Y-%m-%d')
+        if end_last_modified_time:
+            end_last_modified_time = dt.strptime(end_last_modified_time, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+    except ValueError:
+        logger.error('Invalid date format')
+        return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+    if start_last_modified_time and end_last_modified_time:
+        if start_last_modified_time > end_last_modified_time:
+            logger.error(f'Invalid date range: [{start_last_modified_time} - {end_last_modified_time}]')
+            return Response({'error': 'Invalid date range'}, status=status.HTTP_400_BAD_REQUEST)
+        queryset = queryset.filter(last_modified_time__gte=start_last_modified_time, last_modified_time__lte=end_last_modified_time)
+    
     if start_date and end_date:
         if start_date > end_date:
             logger.error(f'Invalid date range: [{start_date} - {end_date}]')
             return Response({'error': 'Invalid date range'}, status=status.HTTP_400_BAD_REQUEST)
-        queryset = ZohoShipmentOrder.objects(date__gte=start_date, date__lte=end_date)
+        queryset = queryset.filter(date__gte=start_date, date__lte=end_date)
     elif start_date and not end_date:
-        queryset = ZohoShipmentOrder.objects(date__gte=start_date)
+        queryset = queryset.filter(date__gte=start_date)
     elif end_date and not start_date:
-        queryset = ZohoShipmentOrder.objects(date__lte=end_date)
-    else:
-        queryset = ZohoShipmentOrder.objects.all()
+        queryset = queryset.filter(date__lte=end_date)
+
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoShipmentOrder)
     if valid_for_only:
         queryset = queryset.only(*valid_for_only)
@@ -251,16 +287,32 @@ def shipment_orders(request):
 def packages(request):
     
     data = request.query_params.dict()
+    queryset = ZohoPackage.objects.all()
     
     shipment_ids = data.get('shipment_ids', None)
 
     only_fields = data.get('only_fields', None)
+    
+    start_last_modified_time = data.get('start_last_modified_time', None)
+    end_last_modified_time = data.get('end_last_modified_time', None)
+    
+    try:
+        if start_last_modified_time:
+            start_last_modified_time = dt.strptime(start_last_modified_time, '%Y-%m-%d')
+        if end_last_modified_time:
+            end_last_modified_time = dt.strptime(end_last_modified_time, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+    except ValueError:
+        logger.error('Invalid date format')
+        return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+    if start_last_modified_time and end_last_modified_time:
+        if start_last_modified_time > end_last_modified_time:
+            logger.error(f'Invalid date range: [{start_last_modified_time} - {end_last_modified_time}]')
+            return Response({'error': 'Invalid date range'}, status=status.HTTP_400_BAD_REQUEST)
+        queryset = queryset.filter(last_modified_time__gte=start_last_modified_time, last_modified_time__lte=end_last_modified_time)
 
     if shipment_ids:
         shipment_ids = shipment_ids.split(',')
-        queryset = ZohoPackage.objects(shipment_id__in=shipment_ids)
-    else:
-        queryset = ZohoPackage.objects.all()
+        queryset = queryset.filter(shipment_id__in=shipment_ids)
     
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoPackage)
     if valid_for_only:
@@ -300,10 +352,28 @@ def packages(request):
 def invoices(request):
     
     data = request.query_params.dict()
+    queryset = ZohoFullInvoice.objects.all()
     
     start_date = data.get('start_date', None)
     end_date = data.get('end_date', None)
     only_fields = data.get('only_fields', None)
+    
+    start_last_modified_time = data.get('start_last_modified_time', None)
+    end_last_modified_time = data.get('end_last_modified_time', None)
+    
+    try:
+        if start_last_modified_time:
+            start_last_modified_time = dt.strptime(start_last_modified_time, '%Y-%m-%d')
+        if end_last_modified_time:
+            end_last_modified_time = dt.strptime(end_last_modified_time, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+    except ValueError:
+        logger.error('Invalid date format')
+        return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+    if start_last_modified_time and end_last_modified_time:
+        if start_last_modified_time > end_last_modified_time:
+            logger.error(f'Invalid date range: [{start_last_modified_time} - {end_last_modified_time}]')
+            return Response({'error': 'Invalid date range'}, status=status.HTTP_400_BAD_REQUEST)
+        queryset = queryset.filter(last_modified_time__gte=start_last_modified_time, last_modified_time__lte=end_last_modified_time)
     
     try:
         if start_date:
@@ -318,13 +388,11 @@ def invoices(request):
         if start_date > end_date:
             logger.error(f'Invalid date range: [{start_date} - {end_date}]')
             return Response({'error': 'Invalid date range'}, status=status.HTTP_400_BAD_REQUEST)
-        queryset = ZohoFullInvoice.objects(date__gte=start_date, date__lte=end_date)
+        queryset = queryset.filter(date__gte=start_date, date__lte=end_date)
     elif start_date and not end_date:
-        queryset = ZohoFullInvoice.objects(date__gte=start_date)
+        queryset = queryset.filter(date__gte=start_date)
     elif end_date and not start_date:
-        queryset = ZohoFullInvoice.objects(date__lte=end_date)
-    else:
-        queryset = ZohoFullInvoice.objects.all()
+        queryset = queryset.filter(date__lte=end_date)
 
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoFullInvoice)
     if valid_for_only:
@@ -363,6 +431,7 @@ def invoices(request):
 def sales_orders(request):
     
     data = request.query_params.dict()
+    queryset = ZohoInventoryShipmentSalesOrder.objects.all()
     
     start_date = data.get('start_date', None)
     end_date = data.get('end_date', None)
@@ -371,6 +440,23 @@ def sales_orders(request):
     sales_orders_ids = data.get('sales_orders_ids', None)
     not_sales_orders_ids = data.get('not_sales_orders_ids', None)
     only_fields = data.get('only_fields', None)
+    
+    start_last_modified_time = data.get('start_last_modified_time', None)
+    end_last_modified_time = data.get('end_last_modified_time', None)
+    
+    try:
+        if start_last_modified_time:
+            start_last_modified_time = dt.strptime(start_last_modified_time, '%Y-%m-%d')
+        if end_last_modified_time:
+            end_last_modified_time = dt.strptime(end_last_modified_time, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+    except ValueError:
+        logger.error('Invalid date format')
+        return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+    if start_last_modified_time and end_last_modified_time:
+        if start_last_modified_time > end_last_modified_time:
+            logger.error(f'Invalid date range: [{start_last_modified_time} - {end_last_modified_time}]')
+            return Response({'error': 'Invalid date range'}, status=status.HTTP_400_BAD_REQUEST)
+        queryset = queryset.filter(last_modified_time__gte=start_last_modified_time, last_modified_time__lte=end_last_modified_time)
     
     try:
         if start_date:
@@ -385,13 +471,13 @@ def sales_orders(request):
         if start_date > end_date:
             logger.error(f'Invalid date range: [{start_date} - {end_date}]')
             return Response({'error': 'Invalid date range'}, status=status.HTTP_400_BAD_REQUEST)
-        queryset = ZohoInventoryShipmentSalesOrder.objects(date__gte=start_date, date__lte=end_date)
+        queryset = queryset.filter(date__gte=start_date, date__lte=end_date)
     elif start_date and not end_date:
-        queryset = ZohoInventoryShipmentSalesOrder.objects(date__gte=start_date)
+        queryset = queryset.filter(date__gte=start_date)
     elif end_date and not start_date:
-        queryset = ZohoInventoryShipmentSalesOrder.objects(date__lte=end_date)
-    else:
-        queryset = ZohoInventoryShipmentSalesOrder.objects.all()
+        queryset = queryset.filter(date__lte=end_date)
+
+        
     if sales_orders_ids and not not_sales_orders_ids:
         sales_orders_ids = sales_orders_ids.split(',')
         queryset = [doc for doc in queryset if doc.salesorder_id in sales_orders_ids]
@@ -439,6 +525,7 @@ def sales_orders(request):
 def full_sales_orders(request):
     
     data = request.query_params.dict()
+    queryset = ZohoInventoryShipmentSalesOrder.objects.all()
     
     start_date = data.get('start_date', None)
     end_date = data.get('end_date', None)
@@ -446,6 +533,23 @@ def full_sales_orders(request):
     sales_orders_ids = data.get('sales_orders_ids', None)
     not_sales_orders_ids = data.get('not_sales_orders_ids', None)
     only_fields = data.get('only_fields', None)
+    
+    start_last_modified_time = data.get('start_last_modified_time', None)
+    end_last_modified_time = data.get('end_last_modified_time', None)
+    
+    try:
+        if start_last_modified_time:
+            start_last_modified_time = dt.strptime(start_last_modified_time, '%Y-%m-%d')
+        if end_last_modified_time:
+            end_last_modified_time = dt.strptime(end_last_modified_time, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+    except ValueError:
+        logger.error('Invalid date format')
+        return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+    if start_last_modified_time and end_last_modified_time:
+        if start_last_modified_time > end_last_modified_time:
+            logger.error(f'Invalid date range: [{start_last_modified_time} - {end_last_modified_time}]')
+            return Response({'error': 'Invalid date range'}, status=status.HTTP_400_BAD_REQUEST)
+        queryset = queryset.filter(last_modified_time__gte=start_last_modified_time, last_modified_time__lte=end_last_modified_time)
 
     try:
         if start_date:
@@ -460,13 +564,12 @@ def full_sales_orders(request):
         if start_date > end_date:
             logger.error(f'Invalid date range: [{start_date} - {end_date}]')
             return Response({'error': 'Invalid date range'}, status=status.HTTP_400_BAD_REQUEST)
-        queryset = ZohoInventoryShipmentSalesOrder.objects(date__gte=start_date, date__lte=end_date)
+        queryset = queryset.filter(date__gte=start_date, date__lte=end_date)
     elif start_date and not end_date:
-        queryset = ZohoInventoryShipmentSalesOrder.objects(date__gte=start_date)
+        queryset = queryset.filter(date__gte=start_date)
     elif end_date and not start_date:
-        queryset = ZohoInventoryShipmentSalesOrder.objects(date__lte=end_date)
-    else:
-        queryset = ZohoInventoryShipmentSalesOrder.objects.all()
+        queryset = queryset.filter(date__lte=end_date)
+
     if sales_orders_ids and not not_sales_orders_ids:
         sales_orders_ids = sales_orders_ids.split(',')
         queryset = [doc for doc in queryset if doc.salesorder_id in sales_orders_ids]
