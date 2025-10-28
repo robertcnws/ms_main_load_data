@@ -31,6 +31,10 @@ from .utils import (
                     transform_data_to_mongo,
                     merge_list
 )
+from ms_util.utils import (
+                    filtered_queryset_from_only_fields,
+                    filtered_list_from_only_fields
+)
 
 import logging
 import requests
@@ -89,19 +93,14 @@ def items(request):
         queryset = ZohoInventoryItem.objects.all()
     if only_fields:
         only_fields_list = [field.strip() for field in only_fields.split(',')]
-        queryset = queryset.only(*only_fields_list)
+        queryset = filtered_queryset_from_only_fields(queryset, only_fields_list)
     # queryset = ZohoInventoryItem.objects.all() or []
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
     
     iterable = paginated_queryset if paginated_queryset is not None else queryset
 
-    items_list = []
-    for doc in iterable:
-        doc_dict = doc.to_mongo().to_dict()
-        if '_id' in doc_dict and isinstance(doc_dict['_id'], ObjectId):
-            doc_dict['_id'] = str(doc_dict['_id'])
-        items_list.append(doc_dict)
+    items_list = filtered_list_from_only_fields(iterable, only_fields_list if only_fields else None)
         
     count = paginator.page.paginator.count if paginator.page else len(items_list)
     number = paginator.page.number if paginator.page else 1
