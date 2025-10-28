@@ -1,4 +1,3 @@
-from rest_framework_mongoengine.viewsets import ModelViewSet
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from requests.adapters import HTTPAdapter, Retry
 from mongoengine import Q
@@ -10,16 +9,11 @@ from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from django.shortcuts import redirect
-from django.contrib import messages
-from django.core import serializers
-from django.urls import reverse
+from rest_framework.permissions import AllowAny
 from django.contrib.auth.decorators import login_required
 from threading import Semaphore, Lock
 from requests.packages.urllib3.util.retry import Retry
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
-from urllib.parse import quote
 from .models import (
                       AppConfig,
                       ZohoInventoryItem, 
@@ -44,6 +38,7 @@ import json
 import requests
 import logging
 import time
+import ms_load_from_zoho.helpers as helpers
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -57,103 +52,14 @@ logger = logging.getLogger(__name__)
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def generate_auth_url(request, zoho_org_id):
-    app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
-    client_id = app_config.zoho_client_id
-    redirect_uri = app_config.zoho_redirect_uri
-    scopes = ",".join(settings.ZOHO_SCOPES)
-    auth_url = (
-        f"https://accounts.zoho.com/oauth/v2/auth?"
-        f"scope={scopes}&client_id={client_id}&response_type=code&access_type=offline"
-        f"&prompt=consent&redirect_uri={redirect_uri}"
-    )
-    return JsonResponse({'auth_url': auth_url}, status=200)
+    return helpers.generate_auth_url(zoho_org_id)
 
-#############################################
-# GET ACCESS TOKEN
-#############################################
-
-def get_access_token(client_id, client_secret, refresh_token, zoho_org_id):
-    logger.info(f'Getting access token: {zoho_org_id}')
-    token_url = settings.ZOHO_TOKEN_URL
-    if not refresh_token:
-        raise Exception(f"Refresh token is missing for Zoho Org ID: {zoho_org_id}")
-        # refresh_token = get_refresh_token()
-    payload = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "refresh_token": refresh_token,
-        "grant_type": "refresh_token",
-    }
-    try:
-        response = requests.post(token_url, data=payload)
-        if response.status_code == 200:
-            access_token = response.json()["access_token"]
-            return access_token
-        else:
-            raise Exception(f"Failed to get access token for Zoho Org ID {zoho_org_id}: {response.text}")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error getting access token for Zoho Org ID {zoho_org_id}: {e}")
-        raise Exception(f"Error getting access token for Zoho Org ID {zoho_org_id}: {e}")
-
-#############################################
-# GET REFRESH TOKEN
-#############################################
-
-def refresh_zoho_access_token(zoho_org_id):
-    app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
-    refresh_url = settings.ZOHO_TOKEN_URL
-    payload = {
-        'refresh_token': app_config.zoho_refresh_token,
-        'client_id': app_config.zoho_client_id,
-        'client_secret': app_config.zoho_client_secret,
-        'grant_type': 'refresh_token'
-    }
-    try:
-        response = requests.post(refresh_url, data=payload)
-        if response.status_code == 200:
-            new_token = response.json().get('access_token')
-            return new_token
-        else:
-            raise Exception(f"Failed to refresh Zoho token for Zoho Org ID {zoho_org_id}: {response.text}")
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error refreshing Zoho token for Zoho Org ID {zoho_org_id} : {e}")
-        raise Exception(f"Error refreshing Zoho token for Zoho Org ID {zoho_org_id}: {e}")
 
 @csrf_exempt
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_refresh_token(request, zoho_org_id):
-    authorization_code = request.GET.get("code", None)
-    if not authorization_code:
-        return JsonResponse({'error': 'Authorization code is missing'}, status=400)
-    
-    app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
-    token_url = "https://accounts.zoho.com/oauth/v2/token"
-    data = {
-        "code": authorization_code,
-        "client_id": app_config.zoho_client_id,
-        "client_secret": app_config.zoho_client_secret,
-        "redirect_uri": app_config.zoho_redirect_uri,
-        "grant_type": "authorization_code",
-    }
-    
-    try:
-        response = requests.post(token_url, data=data)
-        response.raise_for_status()
-        response_json = response.json()
-        access_token = response_json.get("access_token", None)
-        refresh_token = response_json.get("refresh_token", None)
-
-        if access_token and refresh_token:
-            app_config.zoho_refresh_token = refresh_token
-            app_config.save()
-            return redirect(reverse("ms_load_from_zoho:zoho_api_settings", kwargs={'zoho_org_id': zoho_org_id}))
-        else:
-            raise Exception(f"Failed to obtain access_token and/or refresh_token for Zoho Org ID: {zoho_org_id}")
-
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error obtaining access_token and/or refresh_token for Zoho Org ID: {zoho_org_id}: {e}")
-        return JsonResponse({'error': 'Failed to get refresh token'}, status=500)
+    return helpers.get_refresh_token(request, zoho_org_id)
 
 
 #############################################
@@ -164,31 +70,7 @@ def get_refresh_token(request, zoho_org_id):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def zoho_api_settings(request, zoho_org_id): 
-    app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
-    if not app_config:
-        app_config = AppConfig()
-        app_config.save()
-
-    connected = (
-        app_config.zoho_connection_configured
-        and app_config.zoho_refresh_token is not None
-        or ""
-    )
-    
-    auth_url = None
-    if not connected:
-        auth_url = reverse("ms_load_from_zoho:generate_auth_url", kwargs={'zoho_org_id': zoho_org_id})
-    app_config_data = app_config.to_mongo().to_dict()
-    app_config_data.pop('_id', None)  
-
-    data = {
-        "app_config": app_config_data,
-        "connected": connected,
-        "auth_url": auth_url,
-        "zoho_connection_configured": app_config.zoho_connection_configured,
-    }
-
-    return JsonResponse(data, status=200)
+    return helpers.zoho_api_settings(zoho_org_id)
 
 
 #############################################
@@ -197,35 +79,8 @@ def zoho_api_settings(request, zoho_org_id):
 
 @login_required(login_url='login')
 def zoho_api_connect(request, zoho_org_id):
-    app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
-    if app_config.zoho_connection_configured:
-        try:
-            get_access_token(
-                app_config.zoho_client_id,
-                app_config.zoho_client_secret,
-                app_config.zoho_refresh_token,
-                zoho_org_id
-            )
-            messages.success(request, "Zoho API connected successfully.")
-        except Exception as e:
-            messages.error(request, f"Error connecting to Zoho API: {str(e)}")
-    else:
-        messages.warning(request, "Zoho API connection is not configured yet.")
-    return JsonResponse({'message': 'Zoho API connected successfully.'}, status=200)
-
-
-def config_headers(zoho_org_id):
-    app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
-    access_token = get_access_token(
-        app_config.zoho_client_id,
-        app_config.zoho_client_secret,
-        app_config.zoho_refresh_token,
-        zoho_org_id
-    )
-    headers = {
-        "Authorization": f"Zoho-oauthtoken {access_token}"
-    }
-    return headers
+    return helpers.zoho_api_connect(request, zoho_org_id)
+    
 
 #############################################
 # LOAD INVENTORY ITEMS
@@ -237,7 +92,7 @@ def load_inventory_items(request, zoho_org_id):
     app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
     logger.debug(f"AppConfig: {app_config}")
     try:
-        headers = config_headers(zoho_org_id)
+        headers = helpers.config_headers(zoho_org_id)
     except Exception as e:
         logger.error(f"Error connecting to Zoho API: {str(e)}")
         return JsonResponse({'error': f"Error connecting to Zoho API (Load Items): {str(e)}"}, status=500)
@@ -275,7 +130,7 @@ def load_inventory_items(request, zoho_org_id):
             try:
                 response = session.get(single_url, headers=single_headers, params=single_params)
                 if response.status_code == 401:
-                    new_token = refresh_zoho_access_token(zoho_org_id)
+                    new_token = helpers.refresh_zoho_access_token(zoho_org_id)
                     single_headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
                     response = session.get(single_url, headers=single_headers, params=single_params)
                 response.raise_for_status()
@@ -292,7 +147,7 @@ def load_inventory_items(request, zoho_org_id):
             try:
                 response = session.get(single_url, headers=single_headers, params=single_params)
                 if response.status_code == 401:
-                    new_token = refresh_zoho_access_token(zoho_org_id)
+                    new_token = helpers.refresh_zoho_access_token(zoho_org_id)
                     single_headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
                     response = session.get(single_url, headers=single_headers, params=single_params)
                 response.raise_for_status()
@@ -407,7 +262,7 @@ def fetch_sales_order_details(item, session, headers, zoho_org_id):
         url = f'{settings.ZOHO_INVENTORY_SALESORDERS_URL}/{item["salesorder_id"]}'
         response = session.get(url, headers=headers, params={})
         if response.status_code == 401:
-            new_token = refresh_zoho_access_token(zoho_org_id)
+            new_token = helpers.refresh_zoho_access_token(zoho_org_id)
             headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
             response = session.get(url, headers=headers, params={})
         response.raise_for_status()
@@ -421,11 +276,11 @@ def fetch_sales_order_details(item, session, headers, zoho_org_id):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def load_inventory_sales_orders(request, zoho_org_id):
-    MAX_WORKERS = 10
+    MAX_WORKERS = 2
     app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
     logger.info(f'App Config: {app_config}')
     try:
-        headers = config_headers(zoho_org_id)
+        headers = helpers.config_headers(zoho_org_id)
     except Exception as e:
         logger.error(f"Error connecting to Zoho API: {str(e)}")
         return JsonResponse({'error': f"Error connecting to Zoho API (Load Items): {str(e)}"}, status=500)
@@ -469,7 +324,7 @@ def load_inventory_sales_orders(request, zoho_org_id):
         try:
             response = session.get(url, headers=headers, params=params)
             if response.status_code == 401:
-                new_token = refresh_zoho_access_token(zoho_org_id)
+                new_token = helpers.refresh_zoho_access_token(zoho_org_id)
                 headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
                 response = session.get(url, headers=headers, params=params)
             response.raise_for_status()
@@ -553,11 +408,11 @@ def load_inventory_sales_orders(request, zoho_org_id):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def load_inventory_sales_orders_by_customer_name(request, zoho_org_id):
-    MAX_WORKERS = 10
+    MAX_WORKERS = 2
     app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
     logger.debug(app_config)
     try:
-        headers = config_headers(zoho_org_id)
+        headers = helpers.config_headers(zoho_org_id)
     except Exception as e:
         logger.error(f"Error connecting to Zoho API: {str(e)}")
         return JsonResponse({'error': f"Error connecting to Zoho API (Load Items): {str(e)}"}, status=500)
@@ -580,7 +435,7 @@ def load_inventory_sales_orders_by_customer_name(request, zoho_org_id):
         try:
             response = session.get(url, headers=headers, params=params)
             if response.status_code == 401:
-                new_token = refresh_zoho_access_token(zoho_org_id)
+                new_token = helpers.refresh_zoho_access_token(zoho_org_id)
                 headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
                 response = session.get(url, headers=headers, params=params)
             response.raise_for_status()
@@ -664,11 +519,11 @@ def load_inventory_sales_orders_by_customer_name(request, zoho_org_id):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def load_inventory_sales_orders_to_qbwc(request, zoho_org_id):
-    MAX_WORKERS = 10
+    MAX_WORKERS = 2
     app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
     logger.info(f'App Config: {app_config}')
     try:
-        headers = config_headers(zoho_org_id)
+        headers = helpers.config_headers(zoho_org_id)
     except Exception as e:
         logger.error(f"Error connecting to Zoho API: {str(e)}")
         return JsonResponse({'error': f"Error connecting to Zoho API (Load Items): {str(e)}"}, status=500)
@@ -707,7 +562,7 @@ def load_inventory_sales_orders_to_qbwc(request, zoho_org_id):
         try:
             response = session.get(url, headers=headers, params=params)
             if response.status_code == 401:
-                new_token = refresh_zoho_access_token(zoho_org_id)
+                new_token = helpers.refresh_zoho_access_token(zoho_org_id)
                 headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
                 response = session.get(url, headers=headers, params=params)
             response.raise_for_status()
@@ -741,27 +596,16 @@ def load_inventory_sales_orders_to_qbwc(request, zoho_org_id):
     stop=stop_after_attempt(5)
 )
 def fetch_package(package_id, session, headers, zoho_org_id):
+    if not package_id:
+        return None
     url = f'{settings.ZOHO_INVENTORY_PACKAGES_URL}/{package_id}'
     try:
-        response = session.get(url, headers=headers, params={})
-        if response.status_code == 401:
-            new_token = refresh_zoho_access_token(zoho_org_id)
-            headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
-            response = session.get(url, headers=headers, params={})
-        if response.status_code == 429:
-            logger.warning(f"Rate limit exceeded when fetching package {package_id}. Retrying...")
-            time.sleep(10)
-            response.raise_for_status()
-        if response.status_code >= 400:
-            logger.error(f"Error 1 fetching the package: {response.text}")
-            return JsonResponse({'error': 'Failed to fetch shipments'}, status=500)
-        response.raise_for_status()
-        item = response.json()
-        return item.get('package', None)
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error 2 fetching shipments: {e}")
-        raise
-        # return JsonResponse({'error': 'Failed to fetch shipments'}, status=500)
+        resp = helpers.zoho_get(session, url, headers, params={}, zoho_org_id=zoho_org_id, logger=logger, timeout=50)
+        data = resp.json()
+        return data.get('package')
+    except Exception as e:
+        logger.error(f"Error fetching package {package_id}: {e}")
+        return None
     
 @retry(
     retry=retry_if_exception_type(requests.exceptions.RequestException),
@@ -769,52 +613,49 @@ def fetch_package(package_id, session, headers, zoho_org_id):
     stop=stop_after_attempt(5)
 )
 def fetch_shipment_details(item, session, headers, zoho_org_id):
+    shipment_id = item.get("shipment_id")
+    if not shipment_id:
+        return None
+    url = f'{settings.ZOHO_INVENTORY_SHIPMENTS_URL}/{shipment_id}'
     try:
-        url = f'{settings.ZOHO_INVENTORY_SHIPMENTS_URL}/{item["shipment_id"]}'
-        response = session.get(url, headers=headers, params={})
-        if response.status_code == 401:
-            new_token = refresh_zoho_access_token(zoho_org_id)
-            headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
-            response = session.get(url, headers=headers, params={})
-        if response.status_code == 429:
-            logger.warning(f"Rate limit exceeded when fetching shipment {item['shipment_id']}. Retrying...")
-            time.sleep(10)
-            response.raise_for_status()
-        response.raise_for_status()
-        full_item = response.json()
-        return full_item.get('shipmentorder', None)
+        resp = helpers.zoho_get(session, url, headers, params={}, zoho_org_id=zoho_org_id, logger=logger, timeout=50)
+        data = resp.json()
+        return data.get('shipmentorder')
     except Exception as e:
-        logger.error(f"Error fetching details for shipment {item['shipment_id']}: {e}")
-        raise
-        # return None
+        logger.error(f"Error fetching details for shipment {shipment_id}: {e}")
+        return None
     
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def load_inventory_shipments(request, zoho_org_id):
-    MAX_WORKERS = 5
+    MAX_WORKERS = 2
     app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
     logger.debug(app_config)
     try:
-        headers = config_headers(zoho_org_id)
+        headers = helpers.config_headers(zoho_org_id)
     except Exception as e:
         logger.error(f"Error connecting to Zoho API: {str(e)}")
         return JsonResponse({'error': f"Error connecting to Zoho API (Load Shipments): {str(e)}"}, status=500)
 
     data = json.loads(request.body)
     start_date = data.get('start_date', None)
-    end_date = data.get('end_date', None)
+    # end_date = data.get('end_date', None)
     
-    logger.debug(f"Start date: {start_date}, End date: {end_date}")
+    yesterday = dt.strptime(start_date, '%Y-%m-%d') - timedelta(days=1)
+    last_modified_time = yesterday.strftime('%Y-%m-%d')
+    last_modified_time += 'T00:00:00+0000'  
     
-    try:
-        if start_date:
-            dt.strptime(start_date, '%Y-%m-%d')
-        if end_date:
-            dt.strptime(end_date, '%Y-%m-%d')
-    except ValueError:
-        logger.error('Invalid date format')
-        return JsonResponse({'error': 'Invalid date format'}, status=400)
+    logger.debug(f"Fetching shipments from last_modified_time: {last_modified_time}")
+    
+    # try:
+    #     if start_date:
+    #         dt.strptime(start_date, '%Y-%m-%d')
+    #     if end_date:
+    #         dt.strptime(end_date, '%Y-%m-%d')
+    # except ValueError:
+    #     logger.error('Invalid date format')
+    #     return JsonResponse({'error': 'Invalid date format'}, status=400)
 
     yesterday = dt.strptime(start_date, '%Y-%m-%d') - timedelta(days=1)
     last_modified_time = yesterday.strftime('%Y-%m-%d')
@@ -837,47 +678,56 @@ def load_inventory_shipments(request, zoho_org_id):
     
     while True:
         try:
-            response = session.get(url, headers=headers, params=params)
-            if response.status_code == 401:
-                new_token = refresh_zoho_access_token(zoho_org_id)
-                headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
-                response = session.get(url, headers=headers, params=params)
-            if response.status_code >= 400:
-                logger.error(f"Error fetching shipments: {response.text}")
-                return JsonResponse({'error': 'Failed to fetch shipments'}, status=500)
-            items = response.json()
-            items_to_get.extend(items.get('shipmentorders', []))
-            if not items.get('page_context', {}).get('has_more_page', False):
+            response = helpers.zoho_get(session, url, headers, params, zoho_org_id, logger, timeout=60)
+            payload = response.json()
+            items_to_get.extend(payload.get('shipmentorders', []) or [])
+            if not payload.get('page_context', {}).get('has_more_page', False):
                 break
             params['page'] += 1
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching shipments: {e}")
             return JsonResponse({'error': 'Failed to fetch shipments'}, status=500)
-    
+        
+    def _lm(s):
+        return s.get("last_modified_time") or s.get("created_time") or ""
+    items_to_get.sort(key=_lm, reverse=True)
+
+    seen_ship_ids = set()
+    shipments_ids = []
+    for it in items_to_get:
+        sid = it.get("shipment_id")
+        if sid and sid not in seen_ship_ids:
+            seen_ship_ids.add(sid)
+            shipments_ids.append(sid)
+
+    MAX_WORKERS = helpers.ZOHO_WORKERS_SHIP
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(fetch_shipment_details, item, session, headers, zoho_org_id) for item in items_to_get]
-        full_items_to_get = [future.result() for future in as_completed(futures) if future.result()]
+        futures = [
+            executor.submit(fetch_shipment_details, it, session, headers, zoho_org_id)
+            for it in items_to_get if it.get("shipment_id") in seen_ship_ids
+        ]
+        full_items_to_get = []
+        for fut in as_completed(futures):
+            r = fut.result()
+            if r:
+                full_items_to_get.append(r)
     
     all_package_ids = []
-    for data_item in full_items_to_get:
-        pkg_info = data_item.get('packages', [])
-        if pkg_info:
-            package_ids = [pkg.get('package_id') for pkg in pkg_info if pkg.get('package_id')]
-            all_package_ids.extend(package_ids)
-    
-    all_package_ids = list(set(all_package_ids))
-    
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        future_to_package_id = {executor.submit(fetch_package, pkg_id, session, headers, zoho_org_id): pkg_id for pkg_id in all_package_ids}
-        all_packages_data = []
-        for future in as_completed(future_to_package_id):
-            pkg_id = future_to_package_id[future]
-            try:
-                pkg_data = future.result()
-                if pkg_data:
-                    all_packages_data.append(pkg_data)
-            except Exception as exc:
-                logger.error(f"Error fetching package {pkg_id}: {exc}")
+    for sh in full_items_to_get:
+        for pkg in (sh.get("packages") or []):
+            pid = pkg.get("package_id") if isinstance(pkg, dict) else pkg
+            if pid:
+                all_package_ids.append(pid)
+
+    all_package_ids = sorted(set(all_package_ids))
+    MAX_WORKERS_PKG = helpers.ZOHO_WORKERS_PKG
+    all_packages_data = []
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS_PKG) as executor:
+        fut2pkg = {executor.submit(fetch_package, pid, session, headers, zoho_org_id): pid for pid in all_package_ids}
+        for fut in as_completed(fut2pkg):
+            pkg_data = fut.result()
+            if pkg_data:
+                all_packages_data.append(pkg_data)
     
     if all_package_ids:
         existing_packages = ZohoPackage.objects(package_id__in=all_package_ids)
@@ -1098,7 +948,7 @@ def fetch_customers_from_api(headers, params, last_sync_date, zoho_org_id):
         try:
             response = requests.get(url, headers=headers, params=params)
             if response.status_code == 401:
-                new_token = refresh_zoho_access_token(zoho_org_id)
+                new_token = helpers.refresh_zoho_access_token(zoho_org_id)
                 headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
                 response = requests.get(url, headers=headers, params=params)
             if response.status_code != 200:
@@ -1158,7 +1008,7 @@ def process_customers_concurrently(customers_to_get, zoho_org_id):
 def load_books_customers(request, zoho_org_id):
     app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
     try:
-        headers = config_headers(zoho_org_id)
+        headers = helpers.config_headers(zoho_org_id)
     except Exception as e:
         logger.error(f"Error connecting to Zoho API: {str(e)}")
         return JsonResponse({'error': f"Error connecting to Zoho API: {str(e)}"}, status=500)
@@ -1229,7 +1079,7 @@ def fetch_customer_details(contact_id, headers, zoho_org_id):
                     rate_limit_counter += 1
 
                 if response.status_code == 401:
-                    new_token = refresh_zoho_access_token(zoho_org_id)
+                    new_token = helpers.refresh_zoho_access_token(zoho_org_id)
                     headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
                     response = requests.get(url, headers=headers, params=params)
 
@@ -1269,7 +1119,7 @@ def process_customers_in_batches(customers_ids, headers, zoho_org_id):
 
 def load_books_customers_details(zoho_org_id):
     try:
-        headers = config_headers(zoho_org_id)
+        headers = helpers.config_headers(zoho_org_id)
     except Exception as e:
         logger.error(f"Error connecting to Zoho API: {str(e)}")
         return JsonResponse({'error': f"Error connecting to Zoho API: {str(e)}"}, status=500)
@@ -1284,7 +1134,7 @@ def load_books_customers_details(zoho_org_id):
         all_results.extend(results)
 
     for result in all_results:
-        new_item = create_books_customers_instance(logger, result)
+        new_item = create_books_customers_instance(logger, result, zoho_org_id)
         if new_item:
             ZohoCustomer.objects(contact_id=new_item.contact_id).update_one(**new_item.to_mongo().to_dict(), upsert=True)
 
@@ -1301,7 +1151,7 @@ def load_books_invoices_by_customer_name(request, zoho_org_id):
     if request:
         app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
         try:
-            headers = config_headers(zoho_org_id)
+            headers = helpers.config_headers(zoho_org_id)
         except Exception as e:
             logger.error(f"Error connecting to Zoho API: {str(e)}")
             return JsonResponse({'error': f"Error connecting to Zoho API: {str(e)}"}, status=500)
@@ -1335,7 +1185,7 @@ def load_books_invoices(request, zoho_org_id):
     if request:
         app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
         try:
-            headers = config_headers(zoho_org_id)
+            headers = helpers.config_headers(zoho_org_id)
         except Exception as e:
             logger.error(f"Error connecting to Zoho API: {str(e)}")
             return JsonResponse({'error': f"Error connecting to Zoho API: {str(e)}"}, status=500)
@@ -1381,7 +1231,7 @@ def fetch_invoices(url, headers, params, zoho_org_id):
         try:
             response = requests.get(url, headers=headers, params=params, timeout=180)
             if response.status_code == 401:
-                headers['Authorization'] = f'Zoho-oauthtoken {refresh_zoho_access_token(zoho_org_id)}'
+                headers['Authorization'] = f'Zoho-oauthtoken {helpers.refresh_zoho_access_token(zoho_org_id)}'
                 response = requests.get(url, headers=headers, params=params, timeout=180)
 
             if response.status_code != 200:
