@@ -815,16 +815,21 @@ def load_inventory_shipments(request, zoho_org_id):
     except ValueError:
         logger.error('Invalid date format')
         return JsonResponse({'error': 'Invalid date format'}, status=400)
+
+    yesterday = dt.strptime(start_date, '%Y-%m-%d') - timedelta(days=1)
+    last_modified_time = yesterday.strftime('%Y-%m-%d')
+    last_modified_time += 'T00:00:00+0000'  
     
     params = {
         'organization_id': app_config.zoho_org_id,
         'per_page': 200,
         'page': 1,
+        'last_modified_time': last_modified_time,
     }
-    if end_date and start_date:
-        params.update({'date_start': start_date, 'date_end': end_date})
-    elif start_date:
-        params['date'] = start_date
+    # if end_date and start_date:
+    #     params.update({'date_start': start_date, 'date_end': end_date})
+    # elif start_date:
+    #     params['date'] = start_date
 
     url = settings.ZOHO_INVENTORY_SHIPMENTS_URL
     items_to_get = []
