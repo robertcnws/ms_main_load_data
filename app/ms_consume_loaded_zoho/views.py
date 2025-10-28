@@ -21,9 +21,11 @@ from ms_load_from_zoho.models import (
                                         ZohoFullInvoice,
                                         ZohoInventoryShipmentSalesOrder,
                                      )
-from ms_load_from_zoho.views import (
+from ms_load_from_zoho.helpers import (
                                         config_headers,
                                         refresh_zoho_access_token,
+)
+from ms_consume_loaded_zoho.views import (
                                         fetch_sales_order_details
 )
 
