@@ -20,3 +20,4 @@ def filtered_list_from_only_fields(docs, only_fields_list):
             if '_id' in out and isinstance(out['_id'], ObjectId):
                 out['_id'] = str(out['_id'])
         items_list.append(out)
+    return items_list
