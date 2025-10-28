@@ -33,7 +33,8 @@ from .utils import (
 )
 from ms_util.utils import (
                     filtered_queryset_from_only_fields,
-                    filtered_list_from_only_fields
+                    filtered_list_from_only_fields,
+                    _normalize_only_fields
 )
 
 import logging
@@ -91,16 +92,20 @@ def items(request):
         queryset = ZohoInventoryItem.objects(last_modified_time__lte=end_last_modified_time)
     else:
         queryset = ZohoInventoryItem.objects.all()
-    if only_fields:
-        only_fields_list = [field.strip() for field in only_fields.split(',')]
-        queryset = filtered_queryset_from_only_fields(queryset, only_fields_list)
-    # queryset = ZohoInventoryItem.objects.all() or []
+    requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoInventoryItem)
+    if valid_for_only:
+        queryset = queryset.only(*valid_for_only)
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
     
     iterable = paginated_queryset if paginated_queryset is not None else queryset
 
-    items_list = filtered_list_from_only_fields(iterable, only_fields_list if only_fields else None)
+    items_list = filtered_list_from_only_fields(
+        iterable,
+        requested_fields=requested,
+        valid_fields=valid_for_only,
+        db_field_map=db_field_map
+    )
         
     count = paginator.page.paginator.count if paginator.page else len(items_list)
     number = paginator.page.number if paginator.page else 1
