@@ -148,23 +148,25 @@ def customers(request):
         queryset = queryset.filter(email__icontains=params['email'])
     if params.get('zoho_org_id'):
         queryset = queryset.filter(zoho_org_id=params['zoho_org_id'])
-    if params.get('only_fields'):
-        only_fields = params.get('only_fields')
-        only_fields_list = [field.strip() for field in only_fields.split(',')]
-        queryset = queryset.only(*only_fields_list)
+        
+    only_fields = params.get('only_fields', None)
+    requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoCustomer)
+    if valid_for_only:
+        queryset = queryset.only(*valid_for_only)
         
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
+    iterable = paginated_queryset if paginated_queryset is not None else queryset
 
-    list = []
-    for doc in paginated_queryset:
-        doc_dict = doc.to_mongo().to_dict()
-        if '_id' in doc_dict and isinstance(doc_dict['_id'], ObjectId):
-            doc_dict['_id'] = str(doc_dict['_id'])
-        list.append(doc_dict)
+    items_list = filtered_list_from_only_fields(
+        iterable,
+        requested_fields=requested,
+        valid_fields=valid_for_only,
+        db_field_map=db_field_map
+    )
         
     logger.info(
-        f'Customers read: {len(list)}, '
+        f'Customers read: {len(items_list)}, '
         f'paginated: {len(paginated_queryset)}, '
         f'Count: {paginator.page.paginator.count}, '
         f'Number: {paginator.page.number}, '
@@ -172,10 +174,10 @@ def customers(request):
     )
 
     return Response({
-        'count': paginator.page.paginator.count if paginator.page else len(list),
+        'count': paginator.page.paginator.count if paginator.page else len(items_list),
         'next': paginator.get_next_link(),
         'previous': paginator.get_previous_link(),
-        'results': list,
+        'results': items_list,
     }, status=status.HTTP_200_OK)
     
     
@@ -211,22 +213,23 @@ def shipment_orders(request):
         queryset = ZohoShipmentOrder.objects(date__lte=end_date)
     else:
         queryset = ZohoShipmentOrder.objects.all()
-    if only_fields:
-        only_fields_list = [field.strip() for field in only_fields.split(',')]
-        queryset = queryset.only(*only_fields_list)
+    requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoShipmentOrder)
+    if valid_for_only:
+        queryset = queryset.only(*valid_for_only)
     
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
+    iterable = paginated_queryset if paginated_queryset is not None else queryset
 
-    list = []
-    for doc in paginated_queryset:
-        doc_dict = doc.to_mongo().to_dict()
-        if '_id' in doc_dict and isinstance(doc_dict['_id'], ObjectId):
-            doc_dict['_id'] = str(doc_dict['_id'])
-        list.append(doc_dict)
-        
+    items_list = filtered_list_from_only_fields(
+        iterable,
+        requested_fields=requested,
+        valid_fields=valid_for_only,
+        db_field_map=db_field_map
+    )
+
     logger.info(
-        f'Shipment orders read: {len(list)}, '
+        f'Shipment orders read: {len(items_list)}, '
         f'paginated: {len(paginated_queryset)}, '
         f'Count: {paginator.page.paginator.count}, '
         f'Number: {paginator.page.number}, '
@@ -234,10 +237,10 @@ def shipment_orders(request):
     )
 
     return Response({
-        'count': paginator.page.paginator.count if paginator.page else len(list),
+        'count': paginator.page.paginator.count if paginator.page else len(items_list),
         'next': paginator.get_next_link(),
         'previous': paginator.get_previous_link(),
-        'results': list,
+        'results': items_list,
     }, status=status.HTTP_200_OK)
     
     
@@ -258,22 +261,24 @@ def packages(request):
         queryset = ZohoPackage.objects(shipment_id__in=shipment_ids)
     else:
         queryset = ZohoPackage.objects.all()
-    if only_fields:
-        only_fields_list = [field.strip() for field in only_fields.split(',')]
-        queryset = queryset.only(*only_fields_list)
+    
+    requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoPackage)
+    if valid_for_only:
+        queryset = queryset.only(*valid_for_only)
     
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
+    iterable = paginated_queryset if paginated_queryset is not None else queryset
 
-    list = []
-    for doc in paginated_queryset:
-        doc_dict = doc.to_mongo().to_dict()
-        if '_id' in doc_dict and isinstance(doc_dict['_id'], ObjectId):
-            doc_dict['_id'] = str(doc_dict['_id'])
-        list.append(doc_dict)
-        
+    items_list = filtered_list_from_only_fields(
+        iterable,
+        requested_fields=requested,
+        valid_fields=valid_for_only,
+        db_field_map=db_field_map
+    )
+
     logger.info(
-        f'Packages read: {len(list)}, '
+        f'Packages read: {len(items_list)}, '
         f'paginated: {len(paginated_queryset)}, '
         f'Count: {paginator.page.paginator.count}, '
         f'Number: {paginator.page.number}, '
@@ -281,10 +286,10 @@ def packages(request):
     )
 
     return Response({
-        'count': paginator.page.paginator.count if paginator.page else len(list),
+        'count': paginator.page.paginator.count if paginator.page else len(items_list),
         'next': paginator.get_next_link(),
         'previous': paginator.get_previous_link(),
-        'results': list,
+        'results': items_list,
     }, status=status.HTTP_200_OK)
     
     
@@ -320,22 +325,24 @@ def invoices(request):
         queryset = ZohoFullInvoice.objects(date__lte=end_date)
     else:
         queryset = ZohoFullInvoice.objects.all()
-    if only_fields:
-        only_fields_list = [field.strip() for field in only_fields.split(',')]
-        queryset = queryset.only(*only_fields_list)
-    
+
+    requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoFullInvoice)
+    if valid_for_only:
+        queryset = queryset.only(*valid_for_only)
+
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
+    iterable = paginated_queryset if paginated_queryset is not None else queryset
 
-    list = []
-    for doc in paginated_queryset:
-        doc_dict = doc.to_mongo().to_dict()
-        if '_id' in doc_dict and isinstance(doc_dict['_id'], ObjectId):
-            doc_dict['_id'] = str(doc_dict['_id'])
-        list.append(doc_dict)
-        
+    items_list = filtered_list_from_only_fields(
+        iterable,
+        requested_fields=requested,
+        valid_fields=valid_for_only,
+        db_field_map=db_field_map
+    )
+
     logger.info(
-        f'Invoices read: {len(list)}, '
+        f'Invoices read: {len(items_list)}, '
         f'paginated: {len(paginated_queryset)}, '
         f'Count: {paginator.page.paginator.count}, '
         f'Number: {paginator.page.number}, '
@@ -343,10 +350,10 @@ def invoices(request):
     )
 
     return Response({
-        'count': paginator.page.paginator.count if paginator.page else len(list),
+        'count': paginator.page.paginator.count if paginator.page else len(items_list),
         'next': paginator.get_next_link(),
         'previous': paginator.get_previous_link(),
-        'results': list,
+        'results': items_list,
     }, status=status.HTTP_200_OK)
     
     
@@ -394,22 +401,24 @@ def sales_orders(request):
     if installation_name:
         queryset = [doc for doc in queryset for item in doc.line_items if installation_name.lower() in item.get('name', '').lower()]
         
-    if only_fields:
-        only_fields_list = [field.strip() for field in only_fields.split(',')]
-        queryset = [doc.only(*only_fields_list) for doc in queryset]
+    requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoInventoryShipmentSalesOrder)
+    if valid_for_only:
+        queryset = queryset.only(*valid_for_only)
     
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
+    iterable = paginated_queryset if paginated_queryset is not None else queryset
 
-    list = []
-    for doc in paginated_queryset:
-        doc_dict = doc.to_mongo().to_dict()
-        if '_id' in doc_dict and isinstance(doc_dict['_id'], ObjectId):
-            doc_dict['_id'] = str(doc_dict['_id'])
-        list.append(doc_dict)
+    items_list = filtered_list_from_only_fields(
+        iterable,
+        requested_fields=requested,
+        valid_fields=valid_for_only,
+        db_field_map=db_field_map
+    )
+        
         
     logger.info(
-        f'Sales orders read: {len(list)}, '
+        f'Sales orders read: {len(items_list)}, '
         f'paginated: {len(paginated_queryset)}, '
         f'Count: {paginator.page.paginator.count}, '
         f'Number: {paginator.page.number}, '
@@ -417,10 +426,10 @@ def sales_orders(request):
     )
 
     return Response({
-        'count': paginator.page.paginator.count if paginator.page else len(list),
+        'count': paginator.page.paginator.count if paginator.page else len(items_list),
         'next': paginator.get_next_link(),
         'previous': paginator.get_previous_link(),
-        'results': list,
+        'results': items_list,
     }, status=status.HTTP_200_OK)
     
     
@@ -467,32 +476,34 @@ def full_sales_orders(request):
     if installation_name:
         queryset = [doc for doc in queryset for item in doc.line_items if installation_name.lower() in item.get('name', '').lower()]
     
-    if only_fields:
-        only_fields_list = [field.strip() for field in only_fields.split(',')]
-        queryset = [doc.only(*only_fields_list) for doc in queryset]
+    requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoInventoryShipmentSalesOrder)
+    if valid_for_only:
+        queryset = queryset.only(*valid_for_only)
         
     paginator = CustomPagination()
     paginated_queryset = paginator.paginate_queryset(queryset, request)
+    iterable = paginated_queryset if paginated_queryset is not None else queryset
 
-    list = []
-    for doc in paginated_queryset:
-        doc_dict = doc.to_mongo().to_dict()
-        if '_id' in doc_dict and isinstance(doc_dict['_id'], ObjectId):
-            doc_dict['_id'] = str(doc_dict['_id'])
-        list.append(doc_dict)
-        
-    for doc in list:
-        customer = ZohoCustomer.objects(contact_id=doc['customer_id']).first()
-        if customer:
-            customer_dict = customer.to_mongo().to_dict()
-            if '_id' in customer_dict and isinstance(customer_dict['_id'], ObjectId):
-                customer_dict['_id'] = str(customer_dict['_id'])
-            doc['customer'] = customer_dict
-        else:
-            doc['customer'] = {}
+    items_list = filtered_list_from_only_fields(
+        iterable,
+        requested_fields=requested,
+        valid_fields=valid_for_only,
+        db_field_map=db_field_map
+    )
+
+    for doc in items_list:
+        if 'customer_id' in doc:
+            customer = ZohoCustomer.objects(contact_id=doc['customer_id']).first()
+            if customer:
+                customer_dict = customer.to_mongo().to_dict()
+                if '_id' in customer_dict and isinstance(customer_dict['_id'], ObjectId):
+                    customer_dict['_id'] = str(customer_dict['_id'])
+                doc['customer'] = customer_dict
+            else:
+                doc['customer'] = {}
         
     logger.info(
-        f'Sales orders read: {len(list)}, '
+        f'Sales orders read: {len(items_list)}, '
         f'paginated: {len(paginated_queryset)}, '
         f'Count: {paginator.page.paginator.count}, '
         f'Number: {paginator.page.number}, '
@@ -500,10 +511,10 @@ def full_sales_orders(request):
     )
 
     return Response({
-        'count': paginator.page.paginator.count if paginator.page else len(list),
+        'count': paginator.page.paginator.count if paginator.page else len(items_list),
         'next': paginator.get_next_link(),
         'previous': paginator.get_previous_link(),
-        'results': list,
+        'results': items_list,
     }, status=status.HTTP_200_OK)
     
 
@@ -644,13 +655,14 @@ def sales_orders_to_service(request):
             logger.error('Invalid last_modified_time format')
             return Response({'error': 'Invalid last_modified_time format'}, status=status.HTTP_400_BAD_REQUEST)
     
-    if only_fields:
-        only_fields_list = [field.strip() for field in only_fields.split(',')]
-        filtered_sales_orders = []
-        for so in sales_orders:
-            filtered_so = {field: so.get(field) for field in only_fields_list if field in so}
-            filtered_sales_orders.append(filtered_so)
-        sales_orders = filtered_sales_orders
+    requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoInventoryShipmentSalesOrder)
+    if valid_for_only:
+        sales_orders = filtered_list_from_only_fields(
+            sales_orders,
+            requested_fields=requested,
+            valid_fields=valid_for_only,
+            db_field_map=db_field_map
+        )
         
     return Response({
         'count': len(sales_orders),
@@ -783,13 +795,14 @@ def invoices_to_rewards_points(request):
     ]
     
     only_fields = params.get('only_fields', None)
-    if only_fields:
-        only_fields_list = [field.strip() for field in only_fields.split(',')]
-        filtered_invoices = []
-        for invoice in invoices_in_zoho_nws:
-            filtered_invoice = {field: invoice.get(field) for field in only_fields_list if field in invoice}
-            filtered_invoices.append(filtered_invoice)
-        invoices_in_zoho_nws = filtered_invoices
+    requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoFullInvoice)
+    if valid_for_only:
+        invoices_in_zoho_nws = filtered_list_from_only_fields(
+            invoices_in_zoho_nws,
+            requested_fields=requested,
+            valid_fields=valid_for_only,
+            db_field_map=db_field_map
+        )
     
     return Response({
         'count': len(invoices_in_zoho_nws),
