@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
 from mongoengine import Q
 from datetime import datetime as dt, timezone as tz, timedelta
 from django.http import JsonResponse
@@ -177,6 +178,7 @@ def load_inventory_items(request, zoho_org_id):
             page_items, has_more = fetch_page(url, headers.copy(), cur)
             items_to_get.extend(page_items)
             page += 1
+            time.sleep(float(os.getenv("ZOHO_LIST_PAGE_DELAY_SEC", "1")))
     else:
         url = f"{settings.ZOHO_INVENTORY_ITEMS_URL}/{item_number}"
         items_to_get = []
@@ -337,6 +339,7 @@ def load_inventory_sales_orders(request, zoho_org_id):
             if not payload.get('page_context', {}).get('has_more_page', False):
                 break
             params['page'] += 1
+            time.sleep(float(os.getenv("ZOHO_LIST_PAGE_DELAY_SEC", "1")))
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching sales orders: {e}")
             status = 'error'
@@ -483,6 +486,7 @@ def load_inventory_sales_orders_by_customer_name(request, zoho_org_id):
             if not items.get('page_context', {}).get('has_more_page', False):
                 break
             params['page'] += 1
+            time.sleep(float(os.getenv("ZOHO_LIST_PAGE_DELAY_SEC", "1")))
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching sales orders: {e}")
             return JsonResponse({'error': 'Failed to fetch sales orders'}, status=500)
@@ -602,6 +606,7 @@ def load_inventory_sales_orders_to_qbwc(request, zoho_org_id):
             if not items.get('page_context', {}).get('has_more_page', False):
                 break
             params['page'] += 1
+            time.sleep(float(os.getenv("ZOHO_LIST_PAGE_DELAY_SEC", "1")))
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching sales orders: {e}")
             return JsonResponse({'error': 'Failed to fetch sales orders'}, status=500)
@@ -696,6 +701,7 @@ def load_inventory_shipments(request, zoho_org_id):
             if not payload.get('page_context', {}).get('has_more_page', False):
                 break
             params['page'] += 1
+            time.sleep(float(os.getenv("ZOHO_LIST_PAGE_DELAY_SEC", "1")))
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching shipments: {e}")
             status = 'error'
@@ -917,6 +923,7 @@ def fetch_customers_from_api(headers, params, last_sync_date, zoho_org_id, count
                 customers_to_get.extend(recent)
             if customers.get('page_context', {}).get('has_more_page', False):
                 params['page'] += 1
+                time.sleep(float(os.getenv("ZOHO_LIST_PAGE_DELAY_SEC", "1")))
             else:
                 break
         except requests.exceptions.RequestException as e:
@@ -1210,6 +1217,7 @@ def load_books_invoices(request, zoho_org_id):
                 if not page_context.get('has_more_page', False):
                     break
                 params['page'] += 1
+                time.sleep(float(os.getenv("ZOHO_LIST_PAGE_DELAY_SEC", "1")))
             except requests.exceptions.RequestException as e:
                 logger.error(f"Error fetching invoices: {e}")
                 _set_metrics('invoices',
@@ -1359,6 +1367,7 @@ def fetch_invoices(url, headers, params, zoho_org_id):
             if not page_context.get('has_more_page', False):
                 break
             params['page'] += 1
+            time.sleep(float(os.getenv("ZOHO_LIST_PAGE_DELAY_SEC", "1")))
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching invoices: {e}")
             return None

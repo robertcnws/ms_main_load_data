@@ -31,6 +31,7 @@ ZOHO_BASE_BACKOFF = 1.2                                         # factor de back
 ZOHO_JITTER_MAX = 0.3                                           # jitter aleatorio (seg)
 ZOHO_WORKERS_SHIP = int(os.getenv("ZOHO_WORKERS_SHIP", "2"))    # concurrencia shipments
 ZOHO_WORKERS_PKG  = int(os.getenv("ZOHO_WORKERS_PKG",  "2"))    # concurrencia packages
+ZOHO_429_FALLBACK_SLEEP = float(os.getenv("ZOHO_429_FALLBACK_SLEEP", "60"))
 # -----------------------------------------
 
 class RateLimiter:
@@ -72,40 +73,30 @@ def _retry_session():
     return s
 
 def zoho_get(session, url, headers, params, zoho_org_id, logger, timeout=40):
-    """
-    GET robusto:
-      - Respeta RateLimiter global
-      - Reintenta 401 con refresh token
-      - Maneja 429: usa Retry-After si viene, y backoff exponencial con jitter
-      - Levanta excepción si agota intentos
-    """
     attempt = 0
     last_exc = None
     while attempt < ZOHO_MAX_ATTEMPTS:
         attempt += 1
-
-        # pacing global
         _global_rl.wait_for_slot()
-
         try:
             resp = session.get(url, headers=headers, params=params, timeout=timeout)
-            # 401 -> refresh y un reintento inmediato
+
             if resp.status_code == 401:
                 new_token = refresh_zoho_access_token(zoho_org_id)
                 headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
                 _global_rl.wait_for_slot()
                 resp = session.get(url, headers=headers, params=params, timeout=timeout)
 
-            # 429 -> respeta Retry-After o aplica backoff manual
             if resp.status_code == 429:
                 retry_after = resp.headers.get("Retry-After")
                 if retry_after:
                     try:
                         sleep_s = max(1.0, float(retry_after))
                     except Exception:
-                        sleep_s = 10.0
+                        sleep_s = ZOHO_429_FALLBACK_SLEEP
                 else:
-                    sleep_s = (ZOHO_BASE_BACKOFF ** attempt) + random() * ZOHO_JITTER_MAX
+                    # <-- CAMBIO: espera fuerte (por defecto 60s) cuando no hay Retry-After
+                    sleep_s = ZOHO_429_FALLBACK_SLEEP
                 logger.warning(f"429 {url} (attempt {attempt}/{ZOHO_MAX_ATTEMPTS}). Sleeping {sleep_s:.1f}s...")
                 time.sleep(sleep_s)
                 continue
@@ -116,11 +107,12 @@ def zoho_get(session, url, headers, params, zoho_org_id, logger, timeout=40):
         except requests.exceptions.RequestException as e:
             last_exc = e
             sleep_s = (ZOHO_BASE_BACKOFF ** attempt) + random() * ZOHO_JITTER_MAX
-            logger.warning(f"Transient error on {url} (attempt {attempt}/{ZOHO_MAX_ATTEMPTS}): {e}. "
-                           f"Sleeping {sleep_s:.1f}s...")
+            logger.warning(
+                f"Transient error on {url} (attempt {attempt}/{ZOHO_MAX_ATTEMPTS}): {e}. "
+                f"Sleeping {sleep_s:.1f}s..."
+            )
             time.sleep(sleep_s)
 
-    # agotó intentos
     if last_exc:
         logger.error(f"Max attempts exceeded for {url}: {last_exc}")
         raise last_exc
