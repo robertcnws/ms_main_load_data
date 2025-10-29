@@ -75,6 +75,8 @@ def items(request):
     end_last_modified_time = params.get('end_last_modified_time', None)
     only_fields = params.get('only_fields', None)
     
+    zoho_org_id = params.get('zoho_org_id', None)
+    
     try:
         if start_last_modified_time:
             start_last_modified_time = dt.strptime(start_last_modified_time, '%Y-%m-%d')
@@ -94,6 +96,10 @@ def items(request):
         queryset = ZohoInventoryItem.objects(last_modified_time__lte=end_last_modified_time)
     else:
         queryset = ZohoInventoryItem.objects.all()
+        
+    if zoho_org_id:
+        queryset = queryset.filter(zoho_org_id=zoho_org_id)
+        
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoInventoryItem)
     if valid_for_only:
         queryset = queryset.only(*valid_for_only)
@@ -154,6 +160,7 @@ def customers(request):
     
     start_last_modified_time = params.get('start_last_modified_time', None)
     end_last_modified_time = params.get('end_last_modified_time', None)
+    zoho_org_id = params.get('zoho_org_id', None)
     
     try:
         if start_last_modified_time:
@@ -168,6 +175,9 @@ def customers(request):
             logger.error(f'Invalid date range: [{start_last_modified_time} - {end_last_modified_time}]')
             return Response({'error': 'Invalid date range'}, status=status.HTTP_400_BAD_REQUEST)
         queryset = queryset.filter(last_modified_time__gte=start_last_modified_time, last_modified_time__lte=end_last_modified_time)
+
+    if zoho_org_id:
+        queryset = queryset.filter(zoho_org_id=zoho_org_id)
         
     only_fields = params.get('only_fields', None)
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoCustomer)
@@ -214,6 +224,7 @@ def shipment_orders(request):
     start_date = data.get('start_date', None)
     end_date = data.get('end_date', None)
     only_fields = data.get('only_fields', None)
+    zoho_org_id = data.get('zoho_org_id', None)
     
     try:
         if start_date:
@@ -250,6 +261,9 @@ def shipment_orders(request):
         queryset = queryset.filter(date__gte=start_date)
     elif end_date and not start_date:
         queryset = queryset.filter(date__lte=end_date)
+        
+    if zoho_org_id:
+        queryset = queryset.filter(zoho_org_id=zoho_org_id)
 
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoShipmentOrder)
     if valid_for_only:
@@ -297,7 +311,9 @@ def packages(request):
     
     start_last_modified_time = data.get('start_last_modified_time', None)
     end_last_modified_time = data.get('end_last_modified_time', None)
-    
+
+    zoho_org_id = data.get('zoho_org_id', None)
+
     try:
         if start_last_modified_time:
             start_last_modified_time = dt.strptime(start_last_modified_time, '%Y-%m-%d')
@@ -315,6 +331,9 @@ def packages(request):
     if shipment_ids:
         shipment_ids = shipment_ids.split(',')
         queryset = queryset.filter(shipment_id__in=shipment_ids)
+        
+    if zoho_org_id:
+        queryset = queryset.filter(zoho_org_id=zoho_org_id)
     
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoPackage)
     if valid_for_only:
@@ -363,6 +382,8 @@ def invoices(request):
     start_last_modified_time = data.get('start_last_modified_time', None)
     end_last_modified_time = data.get('end_last_modified_time', None)
     
+    zoho_org_id = data.get('zoho_org_id', None)
+    
     try:
         if start_last_modified_time:
             start_last_modified_time = dt.strptime(start_last_modified_time, '%Y-%m-%d')
@@ -395,6 +416,9 @@ def invoices(request):
         queryset = queryset.filter(date__gte=start_date)
     elif end_date and not start_date:
         queryset = queryset.filter(date__lte=end_date)
+        
+    if zoho_org_id:
+        queryset = queryset.filter(zoho_org_id=zoho_org_id)
 
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoFullInvoice)
     if valid_for_only:
@@ -445,7 +469,9 @@ def sales_orders(request):
     
     start_last_modified_time = data.get('start_last_modified_time', None)
     end_last_modified_time = data.get('end_last_modified_time', None)
-    
+
+    zoho_org_id = data.get('zoho_org_id', None)
+
     try:
         if start_last_modified_time:
             start_last_modified_time = dt.strptime(start_last_modified_time, '%Y-%m-%d')
@@ -488,6 +514,8 @@ def sales_orders(request):
         queryset = [doc for doc in queryset if doc.salesorder_id not in not_sales_orders_ids]
     if installation_name:
         queryset = [doc for doc in queryset for item in doc.line_items if installation_name.lower() in item.get('name', '').lower()]
+    if zoho_org_id:
+        queryset = [doc for doc in queryset if doc.zoho_org_id == zoho_org_id]
         
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoInventoryShipmentSalesOrder)
     if valid_for_only:
@@ -538,7 +566,9 @@ def full_sales_orders(request):
     
     start_last_modified_time = data.get('start_last_modified_time', None)
     end_last_modified_time = data.get('end_last_modified_time', None)
-    
+
+    zoho_org_id = data.get('zoho_org_id', None)
+
     try:
         if start_last_modified_time:
             start_last_modified_time = dt.strptime(start_last_modified_time, '%Y-%m-%d')
@@ -580,7 +610,9 @@ def full_sales_orders(request):
         queryset = [doc for doc in queryset if doc.salesorder_id not in not_sales_orders_ids]
     if installation_name:
         queryset = [doc for doc in queryset for item in doc.line_items if installation_name.lower() in item.get('name', '').lower()]
-    
+    if zoho_org_id:
+        queryset = [doc for doc in queryset if doc.zoho_org_id == zoho_org_id]
+        
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoInventoryShipmentSalesOrder)
     if valid_for_only:
         queryset = queryset.only(*valid_for_only)
@@ -652,6 +684,7 @@ def sales_orders_to_service(request):
     last_modified_time = params.get('last_modified_time', None)
     date = params.get('date', None)
     only_fields = params.get('only_fields', None)
+    zoho_org_id = params.get('zoho_org_id', None)
 
     sales_orders_in_zoho_nws = []
     sales_orders_in_zoho_nwshome = []
@@ -759,6 +792,9 @@ def sales_orders_to_service(request):
         except ValueError:
             logger.error('Invalid last_modified_time format')
             return Response({'error': 'Invalid last_modified_time format'}, status=status.HTTP_400_BAD_REQUEST)
+        
+    if zoho_org_id:
+        sales_orders = [so for so in sales_orders if so.get('zoho_org_id') == zoho_org_id]
     
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoInventoryShipmentSalesOrder)
     if valid_for_only:
@@ -891,7 +927,11 @@ def invoices_to_rewards_points(request):
             last_modified_time = last_modified_time.replace(tzinfo=dt_timezone.utc)
 
         queryset = queryset.filter(last_modified_time__gte=last_modified_time)
-            
+
+    zoho_org_id = params.get('zoho_org_id', None)
+    if zoho_org_id:
+        queryset = queryset.filter(zoho_org_id=zoho_org_id)
+
     invoices_in_zoho_nws = list(queryset)
     
     invoices_in_zoho_nws = [
