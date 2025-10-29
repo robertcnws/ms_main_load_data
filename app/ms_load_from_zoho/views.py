@@ -1496,8 +1496,21 @@ def process_and_save_fetched_invoices(invoices_to_get, zoho_org_id):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def metrics_panel(request):
-    fmt = request.GET.get('format', 'json').lower()
-    # añadir last_sync_date faltantes con lectura de SyncMetadata (si alguien llama sin haber corrido nada)
+    fmt = request.GET.get('format').lower()
+    
+    if not fmt:
+        fmt = request.GET.get('?format')
+    
+    if not fmt and request.path.rstrip('/').endswith('.html'):
+        fmt = 'html'
+    
+    if not fmt:
+        accept = request.META.get('HTTP_ACCEPT', '')
+        if 'text/html' in accept:
+            fmt = 'html'
+
+    fmt = (fmt or 'json').lower()
+    
     def _lsd(key):
         return SyncMetadata.get_last_sync_date(key) or ''
 
@@ -1508,7 +1521,7 @@ def metrics_panel(request):
         'invoices':     {'last_sync_date': _lsd('last_sync_date_invoices')},
         'customers':    {'last_sync_date': _lsd('last_sync_date_customers')},
     }
-    # completa campos por defecto si aún no hay runs
+    
     data = {}
     for mod in ['items','salesorders','shipments','invoices','customers']:
         base = {
