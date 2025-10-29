@@ -1496,7 +1496,7 @@ def process_and_save_fetched_invoices(invoices_to_get, zoho_org_id):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def metrics_panel(request):
-    fmt = request.GET.get('format').lower()
+    fmt = request.GET.get('format')
     
     if not fmt:
         fmt = request.GET.get('?format')
