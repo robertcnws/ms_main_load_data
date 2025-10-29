@@ -1525,7 +1525,7 @@ def metrics_panel(request):
         rows = []
         header = """
         <tr>
-          <th>Módulo</th><th>Last Run</th><th>Last Sync</th>
+          <th>Module</th><th>Last Run</th><th>Last Sync</th>
           <th>List Calls</th><th>Detail Calls</th><th>Package Calls</th>
           <th>Created</th><th>Updated</th><th>Duration (s)</th><th>Status</th>
         </tr>"""
@@ -1544,7 +1544,7 @@ def metrics_panel(request):
               <td>{m['status']}</td>
             </tr>""")
         html = f"""
-        <html><head><title>Métricas NWS</title>
+        <html><head><title>Metrics Main Load NWS</title>
         <style>
           body{{font-family:Arial,Helvetica,sans-serif;padding:16px}}
           table{{border-collapse:collapse;width:100%}}
@@ -1552,9 +1552,9 @@ def metrics_panel(request):
           th{{background:#f5f5f5}}
         </style></head>
         <body>
-          <h2>Métricas de Integraciones (última corrida)</h2>
+          <h2>Metrics of Integrations (last run)</h2>
           <table>{header}{''.join(rows)}</table>
-          <p style="margin-top:12px;color:#666">Actualiza esta página para ver la métrica de la corrida más reciente.</p>
+          <p style="margin-top:12px;color:#666">Refresh this page to see the metrics of the latest run.</p>
         </body></html>"""
         return HttpResponse(html)
 

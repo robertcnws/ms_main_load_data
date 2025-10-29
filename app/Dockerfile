@@ -40,6 +40,7 @@ EXPOSE 8000
 
 CMD ["sh", "-c", "python manage.py collectstatic --no-input && \
                   python init_scripts.py && \
-                  celery -A ms_main_load_data worker --loglevel=info -E & \
+                  celery -A ms_main_load_data worker -Q zoho -c 1 -n zoho@%h --loglevel=info -E & \
+                  celery -A ms_main_load_data worker -Q senitron -c 2 -n senitron@%h --loglevel=info -E & \
                   celery -A ms_main_load_data beat --loglevel=info & \
                   gunicorn ms_main_load_data.asgi:application -w 3 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"]
