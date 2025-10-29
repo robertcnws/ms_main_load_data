@@ -1,34 +1,36 @@
 from celery import shared_task
 from datetime import datetime
 from django.http import HttpRequest
-from django.utils import timezone
-from .models import AppConfig
+from .models import AppConfig, SyncMetadata
 from .views import (
-                    load_inventory_items,
-                    load_inventory_sales_orders,
-                    load_inventory_shipments,
-                    load_books_customers,
-                    load_books_customers_details,
-                    load_books_invoices,
-                   )
+    load_inventory_items,
+    load_inventory_sales_orders,
+    load_inventory_shipments,
+    load_books_customers,
+    load_books_invoices,
+)
 import json
-    
-@shared_task
-def task_load_inventory_items():
+
+
+def _mk_request(payload: dict) -> HttpRequest:
     request = HttpRequest()
     request.method = 'POST'
     request.content_type = 'application/json'
-    request._body = json.dumps({}).encode('utf-8')
+    request._body = json.dumps(payload or {}).encode('utf-8')
+    return request
+
+
+@shared_task
+def task_load_inventory_items():
+    request = _mk_request({})
     apps = AppConfig.objects.all()
     for app in apps:
         load_inventory_items(request, app.zoho_org_id)
-    
+
+
 @shared_task
 def task_load_books_customers():
-    request = HttpRequest()
-    request.method = 'POST'
-    request.content_type = 'application/json'
-    request._body = json.dumps({}).encode('utf-8')
+    request = _mk_request({})
     apps = AppConfig.objects.all()
     for app in apps:
         load_books_customers(request, app.zoho_org_id)
@@ -36,44 +38,32 @@ def task_load_books_customers():
 
 @shared_task
 def task_load_inventory_sales_orders():
-    start_date = datetime.now().strftime("%Y-%m-%d")
-    # yesterday = timezone.now() - timezone.timedelta(days=1)
-    # start_date = yesterday.strftime("%Y-%m-%d")
-    data = {'start_date': start_date}
-    request = HttpRequest()
-    request.method = 'POST'
-    request.content_type = 'application/json'
-    request._body = json.dumps(data).encode('utf-8')
     apps = AppConfig.objects.all()
     for app in apps:
-        load_inventory_sales_orders(request, app.zoho_org_id)
-    
+        last_sync = SyncMetadata.get_last_sync_date('last_sync_date_salesorders')
+        start_date = last_sync or datetime.now().strftime("%Y-%m-%d")
+        resp = load_inventory_sales_orders(_mk_request({'start_date': start_date}), app.zoho_org_id)
+        if getattr(resp, 'status_code', 500) == 200:
+            SyncMetadata.update_last_sync_date('last_sync_date_salesorders', datetime.now().strftime("%Y-%m-%d"))
+
+
 @shared_task
 def task_load_inventory_shipments():
-    start_date = datetime.now().strftime("%Y-%m-%d")
-    data = {'start_date': start_date}
-    request = HttpRequest()
-    request.method = 'POST'
-    request.content_type = 'application/json'
-    request._body = json.dumps(data).encode('utf-8')
     apps = AppConfig.objects.all()
     for app in apps:
-        load_inventory_shipments(request, app.zoho_org_id)
-    
-    
+        last_sync = SyncMetadata.get_last_sync_date('last_sync_date_shipments')
+        start_date = last_sync or datetime.now().strftime("%Y-%m-%d")
+        resp = load_inventory_shipments(_mk_request({'start_date': start_date}), app.zoho_org_id)
+        if getattr(resp, 'status_code', 500) == 200:
+            SyncMetadata.update_last_sync_date('last_sync_date_shipments', datetime.now().strftime("%Y-%m-%d"))
+
+
 @shared_task
 def task_load_books_invoices():
-    start_date = datetime.now().strftime("%Y-%m-%d")
-    data = {'start_date': start_date}
-    request = HttpRequest()
-    request.method = 'POST'
-    request.content_type = 'application/json'
-    request._body = json.dumps(data).encode('utf-8')
     apps = AppConfig.objects.all()
     for app in apps:
-        load_books_invoices(request, app.zoho_org_id)
-    
-# @shared_task
-# def task_load_books_customers_details():
-#     load_books_customers_details()
-    
+        last_sync = SyncMetadata.get_last_sync_date('last_sync_date_invoices')
+        start_date = last_sync or datetime.now().strftime("%Y-%m-%d")
+        resp = load_books_invoices(_mk_request({'start_date': start_date}), app.zoho_org_id)
+        if getattr(resp, 'status_code', 500) == 200:
+            SyncMetadata.update_last_sync_date('last_sync_date_invoices', datetime.now().strftime("%Y-%m-%d"))
