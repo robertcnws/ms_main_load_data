@@ -43,6 +43,14 @@ RUN apt-get update
 # Copia el contenido del directorio al contenedor
 COPY . /app/
 
+# Ejecutar autoflake para limpiar el código
+RUN pip install --no-cache-dir autoflake \
+ && autoflake -r --in-place \
+    --remove-all-unused-imports \
+    --remove-unused-variables \
+    --exclude "*/migrations/*,.venv,venv,__pycache__" \
+    .
+
 # Expose port 8000 for the Django application
 EXPOSE 8000
 

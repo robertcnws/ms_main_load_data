@@ -26,18 +26,18 @@ RUN apt-get update
 # Copia el contenido del directorio al contenedor
 COPY . /app/
 
+# Ejecutar autoflake para limpiar el código
+RUN pip install --no-cache-dir autoflake \
+ && autoflake -r --in-place \
+    --remove-all-unused-imports \
+    --remove-unused-variables \
+    --exclude "*/migrations/*,.venv,venv,__pycache__" \
+    .
+
 # Expose port 8000 for the Django application
 EXPOSE 8000
 
 # Ejecuta el script de inicialización y luego arranca Gunicorn y celery
-# CMD ["sh", "-c", "python manage.py makemigrations && \
-#                   python manage.py migrate && \
-#                   python manage.py collectstatic --no-input && \
-#                   python init_scripts.py && \
-#                   celery -A ms_main_load_data worker --loglevel=info -E & \
-#                   celery -A ms_main_load_data beat --loglevel=info & \
-#                   gunicorn ms_main_load_data.asgi:application -w 3 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"]
-
 CMD ["sh", "-c", "python manage.py collectstatic --no-input && \
                   python init_scripts.py && \
                   celery -A ms_main_load_data worker -Q zoho -c 1 -n zoho@%h --loglevel=info -E & \

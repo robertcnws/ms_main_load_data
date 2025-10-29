@@ -1,8 +1,6 @@
 # ./django/ms_main_load_data/urls.py
 
-from django.contrib import admin
-from django.urls import path, include
-from rest_framework_mongoengine import routers   
+from django.urls import path, re_path
 from . import views
 
 app_name = 'ms_load_from_zoho'
@@ -16,5 +14,5 @@ urlpatterns = [
     path("load_sales_orders/customer/<str:zoho_org_id>/", views.load_inventory_sales_orders_by_customer_name, name="load_inventory_sales_orders_by_customer_name"),
     path("load_sales_orders/<str:zoho_org_id>/", views.load_inventory_sales_orders, name="load_inventory_sales_orders"),
     path("load_sales_orders_to_qbwc/<str:zoho_org_id>/", views.load_inventory_sales_orders_to_qbwc, name="load_inventory_sales_orders_to_qbwc"),
-    path('metrics', views.metrics_panel, name='metrics_panel'),
+    re_path(r"^metrics/?$", views.metrics_panel, name="metrics_panel"),
 ]
