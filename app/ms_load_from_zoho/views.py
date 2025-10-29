@@ -1,17 +1,15 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from mongoengine import Q
-from mongoengine.errors import DoesNotExist as MongoDoesNotExist
 from datetime import datetime as dt, timezone as tz, timedelta
 from django.http import JsonResponse
 from django.utils import timezone
 from django.conf import settings
-from django.http import JsonResponse, HttpRequest, HttpResponse
+from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from django.contrib.auth.decorators import login_required
 from threading import Semaphore, Lock
-from requests.packages.urllib3.util.retry import Retry
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 from .models import (
                       AppConfig,
@@ -1109,6 +1107,44 @@ def load_books_customers_details(zoho_org_id):
     logger.info(f"Customers details processed successfully: {len(all_results)}")
     return JsonResponse({'message': 'Customers details loaded successfully'}, status=200)
 
+#############################################
+# LOAD BOOKS INVOICES
+#############################################
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def load_books_invoices_by_customer_name(request, zoho_org_id):
+    if request:
+        app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
+        try:
+            headers = helpers.config_headers(zoho_org_id)
+        except Exception as e:
+            logger.error(f"Error connecting to Zoho API: {str(e)}")
+            return JsonResponse({'error': f"Error connecting to Zoho API: {str(e)}"}, status=500)
+        
+        data = json.loads(request.body)
+        customer_name = data.get('customer_name', None)
+        
+        params = {
+            'organization_id': app_config.zoho_org_id,
+            'page': 1,
+            'per_page': 200,
+            'customer_name': customer_name,
+        }
+        
+        url = f'{settings.ZOHO_BOOKS_INVOICES_URL}'
+        invoice_ids = fetch_invoices(url, headers, params, zoho_org_id)
+        if invoice_ids is None:
+            return JsonResponse({"error": "Failed to fetch customer invoices"}, status=500)
+        
+        invoices_to_save = fetch_full_invoices_parallel(invoice_ids, headers, zoho_org_id)
+
+        process_and_save_fetched_invoices(invoices_to_save, zoho_org_id)
+
+        return JsonResponse({'message': 'Customer Invoices loaded successfully'}, status=200)
+
+    return JsonResponse({'error': 'Invalid request'}, status=400)
+
 # =========================
 # INVOICES (métrica de list + details)
 # =========================
@@ -1303,6 +1339,147 @@ def load_books_invoices(request, zoho_org_id):
     return JsonResponse({'error': 'Invalid request'}, status=400)
 
 
+def fetch_invoices(url, headers, params, zoho_org_id):
+    invoice_ids = []
+    while True:
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=180)
+            if response.status_code == 401:
+                headers['Authorization'] = f'Zoho-oauthtoken {helpers.refresh_zoho_access_token(zoho_org_id)}'
+                response = requests.get(url, headers=headers, params=params, timeout=180)
+
+            if response.status_code != 200:
+                logger.error(f"Error fetching invoices: {response.text}")
+                return None
+
+            invoices = response.json().get('invoices', [])
+            invoice_ids.extend([invoice.get('invoice_id') for invoice in invoices])
+            
+            page_context = response.json().get('page_context', {})
+            if not page_context.get('has_more_page', False):
+                break
+            params['page'] += 1
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching invoices: {e}")
+            return None
+    
+    return invoice_ids
+
+
+def fetch_full_invoices_parallel(invoice_ids, headers, zoho_org_id, max_workers=10):
+    invoices_data = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_invoice = {executor.submit(fetch_full_invoice, invoice_id, headers, zoho_org_id): invoice_id for invoice_id in invoice_ids}
+        for future in as_completed(future_to_invoice):
+            invoice_data = future.result()
+            if invoice_data:
+                invoices_data.append(invoice_data)
+    return invoices_data
+
+
+def fetch_full_invoice(invoice_id, headers, zoho_org_id):
+    get_url = f'{settings.ZOHO_BOOKS_INVOICES_URL}/{invoice_id}/?organization_id={zoho_org_id}'
+    try:
+        response = requests.get(get_url, headers=headers, timeout=180)
+        if response.status_code == 200:
+            return response.json().get('invoice')
+        else:
+            logger.error(f"Error fetching full invoice {invoice_id}: {response.text}")
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching full invoice {invoice_id}: {e}")
+    return None
+
+
+def process_and_save_fetched_invoices(invoices_to_get, zoho_org_id):
+    invoices_ids = [item['invoice_id'] for item in invoices_to_get if item.get('invoice_id')]
+    existing_invoices = ZohoFullInvoice.objects(Q(invoice_id__in=invoices_ids))
+    existing_invoices_ids = set(existing_invoices.distinct('invoice_id'))
+
+    new_invoices = []
+    invoices_to_update = []
+    for data_item in invoices_to_get:
+        new_invoice = create_books_invoice_instance(logger, data_item, zoho_org_id)
+        if new_invoice and new_invoice.invoice_id in existing_invoices_ids:
+            invoices_to_update.append(new_invoice)
+        elif new_invoice:
+            new_invoices.append(new_invoice)
+            
+    logger.info(f"New Invoices: {len(new_invoices)}, Invoices to update: {len(invoices_to_update)}")
+    
+    if new_invoices:
+        ZohoFullInvoice.objects.insert(new_invoices, load_bulk=False)
+    if invoices_to_update:
+        for invoice in invoices_to_update:
+            obj = ZohoFullInvoice.objects(invoice_id=invoice.invoice_id).first()
+            if obj:
+                obj.invoice_id = invoice.invoice_id
+                obj.invoice_number = invoice.invoice_number
+                obj.date = invoice.date
+                obj.due_date = invoice.due_date
+                obj.customer_id = invoice.customer_id
+                obj.customer_name = invoice.customer_name
+                obj.email = invoice.email
+                obj.status = invoice.status
+                obj.recurring_invoice_id = invoice.recurring_invoice_id
+                obj.payment_terms = invoice.payment_terms
+                obj.payment_terms_label = invoice.payment_terms_label
+                obj.payment_reminder_enabled = invoice.payment_reminder_enabled
+                obj.payment_discount = invoice.payment_discount
+                obj.credits_applied = invoice.credits_applied
+                obj.payment_made = invoice.payment_made
+                obj.reference_number = invoice.reference_number
+                obj.line_items = invoice.line_items
+                obj.allow_partial_payments = invoice.allow_partial_payments
+                obj.price_precision = invoice.price_precision
+                obj.sub_total = invoice.sub_total
+                obj.tax_total = invoice.tax_total
+                obj.discount_total = invoice.discount_total
+                obj.discount_percent = invoice.discount_percent
+                obj.discount = invoice.discount
+                obj.discount_applied_on_amount = invoice.discount_applied_on_amount
+                obj.discount_type = invoice.discount_type
+                obj.tax_override_preference = invoice.tax_override_preference
+                obj.is_discount_before_tax = invoice.is_discount_before_tax
+                obj.adjustment = invoice.adjustment
+                obj.adjustment_description = invoice.adjustment_description
+                obj.total = invoice.total
+                obj.balance = invoice.balance
+                obj.is_inclusive_tax = invoice.is_inclusive_tax
+                obj.sub_total_inclusive_of_tax = invoice.sub_total_inclusive_of_tax
+                obj.contact_category = invoice.contact_category
+                obj.tax_rounding = invoice.tax_rounding
+                obj.taxes = invoice.taxes
+                obj.tds_calculation_type = invoice.tds_calculation_type
+                obj.last_payment_date = invoice.last_payment_date
+                obj.contact_persons = invoice.contact_persons
+                obj.salesorder_id = invoice.salesorder_id
+                obj.salesorder_number = invoice.salesorder_number
+                obj.salesorders = invoice.salesorders
+                obj.contact_persons_details = invoice.contact_persons_details
+                obj.created_time = invoice.created_time
+                obj.last_modified_time = invoice.last_modified_time
+                obj.created_date = invoice.created_date
+                obj.created_by_name = invoice.created_by_name
+                obj.estimate_id = invoice.estimate_id
+                obj.customer_default_billing_address = invoice.customer_default_billing_address
+                obj.notes = invoice.notes
+                obj.terms = invoice.terms
+                obj.billing_address = invoice.billing_address
+                obj.shipping_address = invoice.shipping_address
+                obj.contact = invoice.contact
+                obj.inserted_in_qb = invoice.inserted_in_qb
+                obj.items_unmatched = invoice.items_unmatched
+                obj.customer_unmatched = invoice.customer_unmatched
+                obj.force_to_sync = invoice.force_to_sync
+                obj.last_sync_date = invoice.last_sync_date
+                obj.number_of_times_synced = invoice.number_of_times_synced
+                obj.all_items_matched = invoice.all_items_matched
+                obj.all_customer_matched = invoice.all_customer_matched
+                obj.qb_customer_list_id = invoice.qb_customer_list_id
+                obj.zoho_org_id = zoho_org_id
+                obj.save()
+    return new_invoices, invoices_to_update
+            
 # =========================
 # MÉTRICAS PANEL (JSON/HTML)
 # =========================
@@ -1372,6 +1549,4 @@ def metrics_panel(request):
         </body></html>"""
         return HttpResponse(html)
 
-    return JsonResponse(data, status=200)
-            
-    
+    return JsonResponse(data, status=200)   
