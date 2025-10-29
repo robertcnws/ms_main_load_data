@@ -457,7 +457,11 @@ def invoices(request):
 def sales_orders(request):
     
     data = request.query_params.dict()
+    zoho_org_id = data.get('zoho_org_id', None)
+    
     queryset = ZohoInventoryShipmentSalesOrder.objects.all()
+    if zoho_org_id:
+        queryset = queryset.filter(zoho_org_id=zoho_org_id)
     
     start_date = data.get('start_date', None)
     end_date = data.get('end_date', None)
@@ -470,7 +474,7 @@ def sales_orders(request):
     start_last_modified_time = data.get('start_last_modified_time', None)
     end_last_modified_time = data.get('end_last_modified_time', None)
 
-    zoho_org_id = data.get('zoho_org_id', None)
+    
 
     try:
         if start_last_modified_time:
@@ -505,7 +509,6 @@ def sales_orders(request):
     elif end_date and not start_date:
         queryset = queryset.filter(date__lte=end_date)
 
-        
     if sales_orders_ids and not not_sales_orders_ids:
         sales_orders_ids = sales_orders_ids.split(',')
         queryset = [doc for doc in queryset if doc.salesorder_id in sales_orders_ids]
@@ -514,9 +517,7 @@ def sales_orders(request):
         queryset = [doc for doc in queryset if doc.salesorder_id not in not_sales_orders_ids]
     if installation_name:
         queryset = [doc for doc in queryset for item in doc.line_items if installation_name.lower() in item.get('name', '').lower()]
-    if zoho_org_id:
-        queryset = [doc for doc in queryset if doc.zoho_org_id == zoho_org_id]
-        
+       
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoInventoryShipmentSalesOrder)
     if valid_for_only:
         queryset = queryset.only(*valid_for_only)
@@ -555,7 +556,11 @@ def sales_orders(request):
 def full_sales_orders(request):
     
     data = request.query_params.dict()
+    zoho_org_id = data.get('zoho_org_id', None)
+    
     queryset = ZohoInventoryShipmentSalesOrder.objects.all()
+    if zoho_org_id:
+        queryset = queryset.filter(zoho_org_id=zoho_org_id)
     
     start_date = data.get('start_date', None)
     end_date = data.get('end_date', None)
@@ -610,8 +615,6 @@ def full_sales_orders(request):
         queryset = [doc for doc in queryset if doc.salesorder_id not in not_sales_orders_ids]
     if installation_name:
         queryset = [doc for doc in queryset for item in doc.line_items if installation_name.lower() in item.get('name', '').lower()]
-    if zoho_org_id:
-        queryset = [doc for doc in queryset if doc.zoho_org_id == zoho_org_id]
         
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoInventoryShipmentSalesOrder)
     if valid_for_only:
