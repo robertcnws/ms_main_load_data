@@ -63,6 +63,6 @@ ENV FLOWER_USER=admin \
 
 # (Opcional) Healthcheck para workers
 HEALTHCHECK --interval=60s --timeout=10s --retries=3 \
-  CMD celery -A ms_main_load_data inspect ping -d zoho@* -d senitron@* >/dev/null 2>&1 || exit 1
+  CMD celery -A ms_main_load_data inspect ping -d zoho_catalog@* -d zoho_sales@* -d zoho_shipments@* -d senitron@* >/dev/null 2>&1 || exit 1
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

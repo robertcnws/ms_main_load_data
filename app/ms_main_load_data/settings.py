@@ -535,11 +535,11 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY,
         'options': {'queue': 'zoho_shipments'},        # <-- importante
     },
-    # 'run-task-sequence-senitron-monday-saturday': {
-    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
-    #     'schedule': CRONTAB_SENITRON_MONDAY_TO_SATURDAY,
-    #     'options': {'queue': 'senitron'},    # <-- importante
-    # },
+    'run-task-sequence-senitron-monday-saturday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
+        'schedule': CRONTAB_SENITRON_MONDAY_TO_SATURDAY,
+        'options': {'queue': 'senitron'},    # <-- importante
+    },
 
     # SUNDAY
     'run-task-sequence-zoho-customers-items-sunday': {
@@ -557,11 +557,11 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': CRONTAB_ZOHO_SHIPMENTS_SUNDAY,
         'options': {'queue': 'zoho_shipments'},        # <-- importante
     },
-    # 'run-task-sequence-senitron-sunday': {
-    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
-    #     'schedule': CRONTAB_SENITRON_SUNDAY,
-    #     'options': {'queue': 'senitron'},
-    # },
+    'run-task-sequence-senitron-sunday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
+        'schedule': CRONTAB_SENITRON_SUNDAY,
+        'options': {'queue': 'senitron'},
+    },
 }
 
 # MONGOENGINE
