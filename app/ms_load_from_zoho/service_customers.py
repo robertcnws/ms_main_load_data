@@ -5,6 +5,7 @@
 # import datetime
 from datetime import datetime, timezone
 from ms_load_from_zoho.service_shipments import _iso_zoho_midnight_utc, _new_session, _now_iso, _parse_zoho_date, _parse_zoho_ts, _set_metrics
+from ms_load_from_zoho.metrics import set_metrics, now_iso
 from ms_load_from_zoho.models import ZohoCustomer
 from ms_load_from_zoho.manage_instances import create_books_customers_instance
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -84,16 +85,17 @@ def load_customers_service(
     except Exception as e:
         logger.error(f"Error connecting to Zoho API (headers): {e}")
         status = "error"
-        _set_metrics(
+        set_metrics(
             "customers",
-            last_run=_now_iso(),
+            zoho_org_id=zoho_org_id,
+            last_run=now_iso(),
             last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_customers") or "",
             list_calls=list_calls,
             detail_calls=0,
             package_calls=0,
             created=created,
             updated=updated,
-            duration_sec=round(time.time() - t0, 3),
+            duration_sec=round(time.time()-t0, 3),
             status=status,
         )
         return {"status": "error", "message": str(e)}
@@ -185,16 +187,17 @@ def load_customers_service(
             except requests.exceptions.RequestException as e:
                 logger.error(f"Error fetching customers list (page={page}): {e}")
                 status = "error"
-                _set_metrics(
+                set_metrics(
                     "customers",
-                    last_run=_now_iso(),
+                    zoho_org_id=zoho_org_id,
+                    last_run=now_iso(),
                     last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_customers") or "",
                     list_calls=list_calls,
                     detail_calls=0,
                     package_calls=0,
                     created=created,
                     updated=updated,
-                    duration_sec=round(time.time() - t0, 3),
+                    duration_sec=round(time.time()-t0, 3),
                     status=status,
                 )
                 return {"status": "error", "message": "Failed to fetch customers"}
@@ -257,18 +260,19 @@ def load_customers_service(
         )
 
     duration = round(time.time() - t0, 3)
-    _set_metrics(
-        "customers",
-        last_run=_now_iso(),
-        last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_customers") or "",
-        list_calls=list_calls,
-        detail_calls=0,
-        package_calls=0,
-        created=created,
-        updated=updated,
-        duration_sec=duration,
-        status=("partial" if hit_max_pages else status),
-    )
+    set_metrics(
+            "customers",
+            zoho_org_id=zoho_org_id,
+            last_run=now_iso(),
+            last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_customers") or "",
+            list_calls=list_calls,
+            detail_calls=0,
+            package_calls=0,
+            created=created,
+            updated=updated,
+            duration_sec=duration,
+            status=("partial" if hit_max_pages else status),
+        )
 
     logger.info("Customers processed: %s created, %s updated (status=%s, hit_max_pages=%s)",
                 created, updated, status, hit_max_pages)

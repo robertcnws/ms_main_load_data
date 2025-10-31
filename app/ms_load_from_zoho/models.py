@@ -17,12 +17,14 @@ from mongoengine import (
                             DictField,
                             FloatField,
                             ReferenceField,
-                            EmailField,
+                            DateTimeField,
+                            DateField,
                             NULLIFY
                         )
 from mongoengine import fields
 
 from django.utils import timezone
+from datetime import datetime, timezone as dt_timezone
 
 class AppConfig(Document):
     zoho_client_id = StringField(max_length=255, null=True)
@@ -550,3 +552,26 @@ class SyncMetadata(Document):
         SyncMetadata.objects(key=key).update_one(
             set__value=date_str, upsert=True
         )
+        
+class IntegrationMetrics(Document):
+    module = StringField(required=True)              # items | salesorders | shipments | invoices | customers ...
+    zoho_org_id = StringField(required=True)         # org al que corresponde la corrida
+    last_run_dt = DateTimeField(required=True)       # timestamp real
+    last_sync_date = DateField(null=True)            # YYYY-MM-DD (lo guardamos como date)
+    list_calls = IntField(default=0)
+    detail_calls = IntField(default=0)
+    package_calls = IntField(default=0)
+    created = IntField(default=0)
+    updated = IntField(default=0)
+    duration_sec = FloatField(default=0.0)
+    status = StringField(default="ok")               # ok | partial | error
+    # útil para ordenar rápidamente en paneles
+    updated_at = DateTimeField(default=datetime.now(dt_timezone.utc))
+
+    meta = {
+        "collection": "integration_metrics",
+        "indexes": [
+            {"fields": ["module", "zoho_org_id", "-last_run_dt"], "unique": False},
+            {"fields": ["module", "-updated_at"], "unique": False},
+        ],
+    }

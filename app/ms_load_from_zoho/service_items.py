@@ -10,7 +10,7 @@ import requests
 from django.conf import settings
 from mongoengine.queryset.visitor import Q
 
-from ms_load_from_zoho.service_shipments import _now_iso, _set_metrics
+from ms_load_from_zoho.metrics import now_iso, set_metrics
 from ms_load_from_zoho import helpers
 from .models import AppConfig, ZohoInventoryItem, TimelineItem, SyncMetadata
 from .manage_instances import create_inventory_item_instance
@@ -72,13 +72,18 @@ def load_items_service(*, zoho_org_id: str, start_date: str | None = None, item_
     except Exception as e:
         logger.error(f"{LOG_PREFIX} Error connecting to Zoho API: {e}")
         status = "error"
-        _set_metrics(
+        set_metrics(
             "items",
-            last_run=_now_iso(),
+            zoho_org_id=zoho_org_id,
+            last_run=now_iso(),
             last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_items") or "",
-            list_calls=list_calls, detail_calls=0, package_calls=0,
-            created=created, updated=updated,
-            duration_sec=round(time.time() - t0, 3), status=status
+            list_calls=list_calls,
+            detail_calls=0,
+            package_calls=0,
+            created=created,
+            updated=updated,
+            duration_sec=round(time.time() - t0, 3),
+            status=status,
         )
         raise
 
@@ -235,14 +240,19 @@ def load_items_service(*, zoho_org_id: str, start_date: str | None = None, item_
         TimelineItem.objects.insert(timelines)
 
     duration = round(time.time() - t0, 3)
-    _set_metrics(
-        "items",
-        last_run=_now_iso(),
-        last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_items") or "",
-        list_calls=list_calls, detail_calls=0, package_calls=0,
-        created=created, updated=updated,
-        duration_sec=duration, status=status
-    )
+    set_metrics(
+            "items",
+            zoho_org_id=zoho_org_id,
+            last_run=now_iso(),
+            last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_items") or "",
+            list_calls=list_calls,
+            detail_calls=0,
+            package_calls=0,
+            created=created,
+            updated=updated,
+            duration_sec=duration,
+            status=status,
+        )
 
     logger.info(f"{LOG_PREFIX} END created={created} updated={updated} list_calls={list_calls} duration_sec={duration} status={status}")
 

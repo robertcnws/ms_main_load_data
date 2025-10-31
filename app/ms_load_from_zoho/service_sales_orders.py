@@ -144,9 +144,14 @@ def load_sales_orders_service(start_date: Optional[str], zoho_org_id: str) -> Di
         _set_metrics(
             "salesorders",
             last_run=_now_iso(),
+            zoho_org_id=zoho_org_id,
             last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_salesorders") or "",
-            list_calls=list_calls, detail_calls=detail_calls, package_calls=0,
-            created=created, updated=updated, duration_sec=round(time.time()-t0, 3),
+            list_calls=list_calls, 
+            detail_calls=detail_calls, 
+            package_calls=0,
+            created=created, 
+            updated=updated, 
+            duration_sec=round(time.time()-t0, 3),
             status="error",
         )
         return {"status": "error", "message": str(e)}
@@ -308,9 +313,15 @@ def load_sales_orders_service(start_date: Optional[str], zoho_org_id: str) -> Di
     _set_metrics(
         "salesorders",
         last_run=_now_iso(),
+        zoho_org_id=zoho_org_id,
         last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_salesorders") or "",
-        list_calls=list_calls, detail_calls=detail_calls, package_calls=0,
-        created=created, updated=updated, duration_sec=duration, status=final_status,
+        list_calls=list_calls, 
+        detail_calls=detail_calls, 
+        package_calls=0,
+        created=created, 
+        updated=updated, 
+        duration_sec=duration, 
+        status=final_status,
     )
 
     logger.info(

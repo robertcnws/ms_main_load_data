@@ -220,10 +220,17 @@ def load_shipments_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
         logger.error(f"Error connecting to Zoho API (headers): {e}")
         status = "error"
         _set_metrics(
-            "shipments", last_run=_now_iso(),
+            "shipments", 
+            last_run=_now_iso(),
+            zoho_org_id=zoho_org_id,
             last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_shipments") or "",
-            list_calls=list_calls, detail_calls=shipment_detail_calls, package_calls=package_calls,
-            created=created, updated=updated, duration_sec=round(time.time()-t0, 3), status=status,
+            list_calls=list_calls, 
+            detail_calls=shipment_detail_calls, 
+            package_calls=package_calls,
+            created=created, 
+            updated=updated, 
+            duration_sec=round(time.time()-t0, 3), 
+            status=status,
         )
         return {"status": "error", "message": str(e)}
 
@@ -283,10 +290,17 @@ def load_shipments_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
                 logger.error(f"Error fetching shipments list (page={page}): {e}")
                 status = "error"
                 _set_metrics(
-                    "shipments", last_run=_now_iso(),
+                    "shipments", 
+                    last_run=_now_iso(),
+                    zoho_org_id=zoho_org_id,
                     last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_shipments") or "",
-                    list_calls=list_calls, detail_calls=shipment_detail_calls, package_calls=package_calls,
-                    created=created, updated=updated, duration_sec=round(time.time()-t0, 3), status=status,
+                    list_calls=list_calls, 
+                    detail_calls=shipment_detail_calls, 
+                    package_calls=package_calls,
+                    created=created, 
+                    updated=updated, 
+                    duration_sec=round(time.time()-t0, 3), 
+                    status=status,
                 )
                 return {"status": "error", "message": "Failed to fetch shipments"}
 
@@ -460,9 +474,15 @@ def load_shipments_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
     _set_metrics(
         "shipments",
         last_run=_now_iso(),
+        zoho_org_id=zoho_org_id,
         last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_shipments") or "",
-        list_calls=list_calls, detail_calls=shipment_detail_calls, package_calls=package_calls,
-        created=created, updated=updated, duration_sec=duration, status=final_status,
+        list_calls=list_calls, 
+        detail_calls=shipment_detail_calls, 
+        package_calls=package_calls,
+        created=created, 
+        updated=updated, 
+        duration_sec=duration, 
+        status=final_status,
     )
 
     logger.info("Shipments processed: %s created, %s updated (status=%s, hit_max_pages=%s, partial_by_limits=%s)",

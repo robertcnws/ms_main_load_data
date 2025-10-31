@@ -7,7 +7,7 @@ from django.conf import settings
 from django.http import JsonResponse
 from ms_load_from_zoho.models import AppConfig, ZohoFullInvoice, SyncMetadata
 from ms_load_from_zoho.manage_instances import create_books_invoice_instance
-from ms_load_from_zoho.service_shipments import _now_iso, _set_metrics
+from ms_load_from_zoho.metrics import now_iso, set_metrics
 import ms_load_from_zoho.helpers as helpers
 import requests, time, os, logging, json
 
@@ -36,11 +36,19 @@ def load_invoices_service(start_date: str, zoho_org_id: str):
     except Exception as e:
         logger.error("Error connecting to Zoho API (headers): %s", e)
         status = "error"
-        _set_metrics("invoices", last_run=_now_iso(),
-                     last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_invoices") or "",
-                     list_calls=list_calls, detail_calls=detail_calls, package_calls=0,
-                     created=created, updated=updated,
-                     duration_sec=round(time.time()-t0, 3), status=status)
+        set_metrics(
+            "invoices",
+            zoho_org_id=zoho_org_id,
+            last_run=now_iso(),
+            last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_invoices") or "",
+            list_calls=list_calls,
+            detail_calls=detail_calls,
+            package_calls=0,
+            created=created,
+            updated=updated,
+            duration_sec=round(time.time()-t0, 3),
+            status=status,
+        )
         return JsonResponse({"error": f"Auth error: {e}"}, status=500)
 
     # ---- ventana temporal
@@ -82,11 +90,19 @@ def load_invoices_service(start_date: str, zoho_org_id: str):
                     err = {"raw": resp.text}
                 logger.error("Zoho Books list 400/err=%s status=%s", err, resp.status_code)
                 status = "error"
-                _set_metrics("invoices", last_run=_now_iso(),
-                             last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_invoices") or "",
-                             list_calls=list_calls, detail_calls=detail_calls, package_calls=0,
-                             created=created, updated=updated,
-                             duration_sec=round(time.time()-t0, 3), status=status)
+                set_metrics(
+                    "invoices",
+                    zoho_org_id=zoho_org_id,
+                    last_run=now_iso(),
+                    last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_invoices") or "",
+                    list_calls=list_calls,
+                    detail_calls=detail_calls,
+                    package_calls=0,
+                    created=created,
+                    updated=updated,
+                    duration_sec=round(time.time()-t0, 3),
+                    status=status,
+                )
                 # Devuelve el mismo status que Zoho (p.ej. 400) para ver el problema arriba
                 return JsonResponse({"error": "Failed to fetch invoices", "zoho": err},
                                     status=resp.status_code)
@@ -105,21 +121,37 @@ def load_invoices_service(start_date: str, zoho_org_id: str):
         except requests.exceptions.RequestException as e:
             logger.error("Network error fetching invoices list: %s", e)
             status = "error"
-            _set_metrics("invoices", last_run=_now_iso(),
-                         last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_invoices") or "",
-                         list_calls=list_calls, detail_calls=detail_calls, package_calls=0,
-                         created=created, updated=updated,
-                         duration_sec=round(time.time()-t0, 3), status=status)
+            set_metrics(
+                "invoices",
+                zoho_org_id=zoho_org_id,
+                last_run=now_iso(),
+                last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_invoices") or "",
+                list_calls=list_calls,
+                detail_calls=detail_calls,
+                package_calls=0,
+                created=created,
+                updated=updated,
+                duration_sec=round(time.time()-t0, 3),
+                status=status,
+            )
             return JsonResponse({"error": "Network error fetching invoices"}, status=500)
 
     # Si no hay nada que detallar, devuelve OK con métricas
     if not invoice_ids:
         duration = round(time.time()-t0, 3)
-        _set_metrics("invoices", last_run=_now_iso(),
-                     last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_invoices") or "",
-                     list_calls=list_calls, detail_calls=detail_calls, package_calls=0,
-                     created=created, updated=updated,
-                     duration_sec=duration, status=status)
+        set_metrics(
+            "invoices",
+            zoho_org_id=zoho_org_id,
+            last_run=now_iso(),
+            last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_invoices") or "",
+            list_calls=list_calls,
+            detail_calls=detail_calls,
+            package_calls=0,
+            created=created,
+            updated=updated,
+            duration_sec=duration,
+            status=status,
+        )
         return JsonResponse({"message": "Invoices loaded successfully (empty window)"}, status=200)
 
     # ---- DETALLES (fuera del while)
@@ -186,11 +218,19 @@ def load_invoices_service(start_date: str, zoho_org_id: str):
 
     # ---- MÉTRICAS + RETURN
     duration = round(time.time()-t0, 3)
-    _set_metrics("invoices", last_run=_now_iso(),
-                 last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_invoices") or "",
-                 list_calls=list_calls, detail_calls=detail_calls, package_calls=0,
-                 created=created, updated=updated,
-                 duration_sec=duration, status=status)
+    set_metrics(
+            "invoices",
+            zoho_org_id=zoho_org_id,
+            last_run=now_iso(),
+            last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_invoices") or "",
+            list_calls=list_calls,
+            detail_calls=detail_calls,
+            package_calls=0,
+            created=created,
+            updated=updated,
+            duration_sec=duration,
+            status=status,
+    )
 
     logger.info("Invoices processed: %s created, %s updated", created, updated)
     return JsonResponse({"message": "Invoices loaded successfully",
