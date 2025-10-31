@@ -17,7 +17,7 @@ from ms_load_from_zoho.models import (
                       SyncMetadata,
                     )
 
-
+from typing import Dict, Optional
 from ms_load_from_zoho.service_shipments import load_shipments_service
 import json
 import logging
@@ -295,96 +295,85 @@ def metrics_panel(request):
 
     return JsonResponse(data, status=200)
 
+MODULES = ['items', 'salesorders', 'shipments', 'invoices', 'customers']
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def metrics_panel(request):
-    fmt = (request.GET.get('format') or request.GET.get('?format') or '').lower()
+    # ---- detección de formato (igual que antes) ----
+    fmt = request.GET.get('format') or request.GET.get('?format')
     if not fmt and request.path.rstrip('/').endswith('.html'):
         fmt = 'html'
     if not fmt:
         accept = request.META.get('HTTP_ACCEPT', '')
         if 'text/html' in accept:
             fmt = 'html'
-    fmt = fmt or 'json'
+    fmt = (fmt or 'json').lower()
 
-    org = request.GET.get("org")  # opcional: filtra por zoho_org_id
+    # ---- armar data por módulo -> { org_id: metrics } ----
+    data: Dict[str, Dict[str, dict]] = {}
+    for mod in MODULES:
+        # sin zoho_org_id => devuelve el último por cada org de ese módulo
+        per_org = get_latest_metrics(mod)  # dict {"774691355": {...}, "881031522": {...}}
+        # si tu get_latest_metrics devuelve {}, mantenemos {} para el módulo
+        data[mod] = per_org or {}
 
-    def _lsd(key):
-        return SyncMetadata.get_last_sync_date(key) or ''
-
-    defaults = {
-        'items':        {'last_sync_date': _lsd('last_sync_date_items')},
-        'salesorders':  {'last_sync_date': _lsd('last_sync_date_salesorders')},
-        'shipments':    {'last_sync_date': _lsd('last_sync_date_shipments')},
-        'invoices':     {'last_sync_date': _lsd('last_sync_date_invoices')},
-        'customers':    {'last_sync_date': _lsd('last_sync_date_customers')},
-    }
-
-    data = {}
-    for mod in ['items','salesorders','shipments','invoices','customers']:
-        latest = get_latest_metrics(mod, zoho_org_id=org)
-        base = {
-            'last_run': '',
-            'last_sync_date': defaults.get(mod,{}).get('last_sync_date',''),
-            'list_calls': 0, 'detail_calls': 0, 'package_calls': 0,
-            'created': 0, 'updated': 0,
-            'duration_sec': 0.0, 'status': ''
-        }
-        base.update(latest or {})
-        # si no hay last_sync persistido en métricas, usa SyncMetadata
-        if not base.get('last_sync_date'):
-            base['last_sync_date'] = defaults.get(mod,{}).get('last_sync_date','')
-        data[mod] = base
-
+    # ---- salida HTML ----
     if fmt == 'html':
-        rows = []
         header = """
         <tr>
-          <th>Module</th>
-          <th>Company</th>
-          <th>Last Run</th>
-          <th>Last Sync</th>
-          <th>List Calls</th>
-          <th>Detail Calls</th>
-          <th>Package Calls</th>
-          <th>Created</th>
-          <th>Updated</th><th>Duration (s)</th><th>Status</th>
-          <th>Duration (s)</th>
-          <th>Status</th>
+          <th>Module</th><th>Org</th><th>Last Run</th><th>Last Sync</th>
+          <th>List Calls</th><th>Detail Calls</th><th>Package Calls</th>
+          <th>Created</th><th>Updated</th><th>Duration (s)</th><th>Status</th>
         </tr>"""
-        for mod, m in data.items():
-            company = 'NWS' if m.get('zoho_org_id', '') == settings.ZOHO_ORG_ID else 'NWSHOME'
-            rows.append(f"""
-            <tr>
-              <td>{mod}</td>
-              <td>{company}</td>
-              <td>{m['last_run']}</td>
-              <td>{m['last_sync_date']}</td>
-              <td>{m['list_calls']}</td>
-              <td>{m['detail_calls']}</td>
-              <td>{m['package_calls']}</td>
-              <td>{m['created']}</td>
-              <td>{m['updated']}</td>
-              <td>{m['duration_sec']}</td>
-              <td>{m['status']}</td>
-            </tr>""")
+        rows = []
+        for mod, per_org in data.items():
+            if not per_org:
+                rows.append(f"""
+                <tr>
+                  <td>{mod}</td>
+                  <td colspan="10" style="color:#999;text-align:center">No data</td>
+                </tr>""")
+                continue
+            for org_id, m in sorted(per_org.items(), key=lambda kv: kv[0]):
+                rows.append(f"""
+                <tr>
+                  <td>{mod}</td>
+                  <td>{org_id}</td>
+                  <td>{m.get('last_run','')}</td>
+                  <td>{m.get('last_sync_date','')}</td>
+                  <td>{m.get('list_calls',0)}</td>
+                  <td>{m.get('detail_calls',0)}</td>
+                  <td>{m.get('package_calls',0)}</td>
+                  <td>{m.get('created',0)}</td>
+                  <td>{m.get('updated',0)}</td>
+                  <td>{m.get('duration_sec',0.0)}</td>
+                  <td>{m.get('status','')}</td>
+                </tr>""")
+
         html = f"""
-        <html><head><title>Metrics Main Load NWS</title>
-        <style>
-          body{{font-family:Arial,Helvetica,sans-serif;padding:16px}}
-          table{{border-collapse:collapse;width:100%}}
-          th,td{{border:1px solid #ddd;padding:8px;text-align:center}}
-          th{{background:#f5f5f5}}
-        </style></head>
-        <body>
-          <h2>Metrics of Integrations (last run{(' - org=' + org) if org else ''})</h2>
-          <table>{header}{''.join(rows)}</table>
-          <p style="margin-top:12px;color:#666">Append <code>?org=&lt;zoho_org_id&gt;</code> to filter.</p>
-          <p style="margin-top:12px;color:#666">Refresh this page to see the metrics of the latest run.</p>
-        </body></html>"""
+        <html>
+          <head>
+            <title>Metrics Main Load NWS</title>
+            <style>
+              body{{font-family:Arial,Helvetica,sans-serif;padding:16px}}
+              table{{border-collapse:collapse;width:100%}}
+              th,td{{border:1px solid #ddd;padding:8px;text-align:center}}
+              th{{background:#f5f5f5}}
+              .hint{{margin-top:12px;color:#666}}
+            </style>
+          </head>
+          <body>
+            <h2>Metrics of Integrations (last run per org)</h2>
+            <table>{header}{''.join(rows)}</table>
+            <p class="hint">Refresh this page to see the latest metrics. JSON: add <code>?format=json</code></p>
+          </body>
+        </html>"""
         return HttpResponse(html)
 
-    return JsonResponse(data, status=200)
+    # ---- salida JSON ----
+    # Estructura: { "items": { "<org>": {...}, ... }, "salesorders": {...}, ... }
+    return JsonResponse(data, status=200, safe=True)
 
 
 # --------------
