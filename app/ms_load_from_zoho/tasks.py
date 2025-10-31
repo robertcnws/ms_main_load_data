@@ -164,22 +164,28 @@ def task_load_inventory_shipments():
     except Exception as e:
         logger.exception("ZOHO: shipments task error: %s", str(e))
         raise
+    
 
 @shared_task(queue="zoho_sales")
 def task_load_books_invoices():
     logger.info("ZOHO: invoices TASK START")
     apps = AppConfig.objects.all()
-    last_sync = SyncMetadata.get_last_sync_date('last_sync_date_invoices')
+    last_sync = SyncMetadata.get_last_sync_date("last_sync_date_invoices")
     last_sync_date = datetime.strptime(last_sync, "%Y-%m-%d") if last_sync else None
     now_date = datetime.now()
     days_before_now = (now_date - timedelta(days=settings.TIMEDELTA_ZOHO_INVOICES)).strftime("%Y-%m-%d")
-    days_before = (last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_INVOICES)).strftime("%Y-%m-%d") \
-                if last_sync_date else days_before_now
+    start_date = (last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_INVOICES)).strftime("%Y-%m-%d") \
+                 if last_sync_date else days_before_now
+
     for org in apps:
         try:
-            res = load_invoices_service(start_date=days_before, zoho_org_id=org.zoho_org_id)
-            logger.info("Invoices task org=%s -> %s", org, res)
+            res = load_invoices_service(start_date=start_date, zoho_org_id=org.zoho_org_id)
+            try:
+                logger.info("Invoices task org=%s -> <%s %s>", org, res.status_code, getattr(res, "content", b"")[:200])
+            except Exception:
+                logger.info("Invoices task org=%s -> %s", org, res)
         except Exception as e:
             logger.exception("Invoices task failed for org=%s: %s", org, e)
 
     return "Task Books Invoices Completed"
+
