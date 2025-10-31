@@ -1,3 +1,4 @@
+import os
 from ms_load_from_zoho.service_customers import load_customers_service
 from ms_load_from_zoho.service_invoices import load_invoices_service
 from ms_load_from_zoho.service_items import load_items_service
@@ -62,23 +63,71 @@ def task_load_books_customers():
     return "Task Books Customers Completed"
 
 
-@shared_task(queue="zoho_sales")
+_SO_HARD_TL  = int(os.getenv("CELERY_SO_HARD_TL", 900))   # hard time limit (seg)
+_SO_SOFT_TL  = int(os.getenv("CELERY_SO_SOFT_TL", 840))   # soft time limit (seg)
+
+@shared_task(
+    queue="zoho_sales",
+    autoretry_for=(SoftTimeLimitExceeded,),
+    retry_backoff=True,      # backoff exponencial
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 3},
+    time_limit=_SO_HARD_TL,
+    soft_time_limit=_SO_SOFT_TL,
+)
 def task_load_inventory_sales_orders():
     logger.info("ZOHO: sales orders TASK START")
-    apps = AppConfig.objects.all()
-    last_sync = SyncMetadata.get_last_sync_date('last_sync_date_salesorders')
-    last_sync_date = datetime.strptime(last_sync, "%Y-%m-%d") if last_sync else None
-    now_date = datetime.now()
-    days_before_now = (now_date - timedelta(days=settings.TIMEDELTA_ZOHO_SALES_ORDERS)).strftime("%Y-%m-%d")
-    days_before = (last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_SALES_ORDERS)).strftime("%Y-%m-%d") \
-                if last_sync_date else days_before_now
-    for org in apps:
-        try:
-            res = load_sales_orders_service(start_date=days_before, zoho_org_id=org.zoho_org_id)
-            logger.info("Sales Orders task org=%s -> %s", org, res)
-        except Exception as e:
-            logger.exception("Sales Orders task failed for org=%s: %s", org, e)
-    return "Task Inventory Sales Orders Completed"
+
+    try:
+        apps = AppConfig.objects.all()
+
+        last_sync = SyncMetadata.get_last_sync_date('last_sync_date_salesorders')
+        last_sync_date = datetime.strptime(last_sync, "%Y-%m-%d") if last_sync else None
+
+        now_date = datetime.now()
+        days_before_now = (now_date - timedelta(days=settings.TIMEDELTA_ZOHO_SALES_ORDERS)).strftime("%Y-%m-%d")
+        # Si hay last_sync, retrocede TIMEDELTA desde esa fecha; si no, desde hoy
+        days_before = (
+            (last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_SALES_ORDERS)).strftime("%Y-%m-%d")
+            if last_sync_date else days_before_now
+        )
+
+        bad_orgs = []
+
+        for org in apps:
+            try:
+                res = load_sales_orders_service(start_date=days_before, zoho_org_id=org.zoho_org_id)
+                status = res.get("status", "ok")
+                logger.info(
+                    "Sales Orders org=%s -> status=%s created=%s updated=%s list_calls=%s detail_calls=%s duration=%.2fs",
+                    org.zoho_org_id, status, res.get("created"), res.get("updated"),
+                    res.get("list_calls"), res.get("detail_calls"), res.get("duration_sec", 0.0),
+                )
+                if status in ("error", "partial"):
+                    # No forzamos retry del task completo (puede haber varias orgs);
+                    # solo marcamos y continuamos para no perder progreso.
+                    bad_orgs.append((org.zoho_org_id, status))
+            except SoftTimeLimitExceeded:
+                # Deja que el decorador haga el autoretry
+                logger.warning("ZOHO: sales orders soft timeout en org=%s -> autoretry", org.zoho_org_id)
+                raise
+            except Exception as e:
+                logger.exception("Sales Orders task failed for org=%s: %s", org.zoho_org_id, e)
+                bad_orgs.append((org.zoho_org_id, "error"))
+
+        if bad_orgs:
+            logger.warning("Sales Orders finalizó con incidencias en orgs: %s", bad_orgs)
+
+        return "Task Inventory Sales Orders Completed"
+
+    except SoftTimeLimitExceeded:
+        # Propaga para que el decorador haga retry
+        logger.warning("ZOHO: sales orders soft timeout (global) -> autoretry")
+        raise
+    except Exception as e:
+        # No autoretry por defecto para otras excepciones globales; se registra y sale.
+        logger.exception("ZOHO: sales orders task error (global): %s", e)
+        return "Task Inventory Sales Orders Completed (with errors)"
 
 
 @shared_task(

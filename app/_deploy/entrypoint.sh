@@ -1,17 +1,32 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# --------- Config por variables de entorno (con defaults) ----------
+# ================== Config por variables de entorno (con defaults) ==================
 : "${DJANGO_SETTINGS_MODULE:=ms_main_load_data.settings}"
 : "${PORT:=8000}"
 
-# Celery
+# Celery Concurrency por cola
 : "${ZOHO_CATALOG_CONCURRENCY:=2}"
-: "${ZOHO_SALES_CONCURRENCY:=2}"
-: "${ZOHO_SHIPMENTS_CONCURRENCY:=1}"
+: "${ZOHO_SALES_CONCURRENCY:=1}"       # bajar a 1 para evitar hog/solapes
+: "${ZOHO_SHIPMENTS_CONCURRENCY:=1}"   # 1 para anti-429
 : "${SENITRON_CONCURRENCY:=2}"
 : "${CELERY_LOGLEVEL:=info}"
 : "${CELERY_EVENTS:=1}" # 1=habilita -E, 0=no
+
+# Límites por cola (soft/hard timelimits)  -> ajusta si lo necesitas
+: "${ZOHO_SALES_SOFT_TL:=1080}"        # 18 min
+: "${ZOHO_SALES_HARD_TL:=1200}"        # 20 min
+: "${ZOHO_SHIP_SOFT_TL:=540}"          # 9 min
+: "${ZOHO_SHIP_HARD_TL:=600}"          # 10 min
+: "${ZOHO_CATALOG_SOFT_TL:=420}"       # 7 min
+: "${ZOHO_CATALOG_HARD_TL:=480}"       # 8 min
+: "${SENITRON_SOFT_TL:=600}"
+: "${SENITRON_HARD_TL:=720}"
+
+# Prefetch / estabilidad (comunes)
+: "${CELERY_PREFETCH:=1}"              # 1 = no acaparar tareas
+: "${CELERY_MAX_TASKS_PER_CHILD:=20}"  # reciclar workers
+: "${CELERY_OPTIMIZATION:=fair}"       # -O fair
 
 # Flower
 : "${FLOWER_ENABLE:=1}"       # 1=on, 0=off
@@ -27,16 +42,16 @@ set -Eeuo pipefail
 # Gunicorn
 : "${GUNICORN_WORKERS:=3}"
 
-# --------- Purga/Limpieza inicial (opt-in) ----------
-: "${PURGE_ON_BOOT:=1}"                               # 1 = purgar colas celery
-: "${QUEUES_TO_PURGE:=celery,default,zoho_catalog,zoho_sales,zoho_shipments,senitron}"  # colas separadas por coma
-: "${PURGE_TIMEOUT:=10}"                              # segundos para dar tiempo al broker
+# Purga/Limpieza inicial (mejor OFF en prod)
+: "${PURGE_ON_BOOT:=0}"                               # <--- CAMBIO: evita perder colas en reinicios
+: "${QUEUES_TO_PURGE:=celery,default,zoho_catalog,zoho_sales,zoho_shipments,senitron}"
+: "${PURGE_TIMEOUT:=6}"
 
-# Beat schedule (archivo local). Bórralo si quieres resetear entradas antiguas.
-: "${SCHEDULE_RESET_ON_BOOT:=0}"               # 1 = borrar archivo
+# Beat schedule (archivo local)
+: "${SCHEDULE_RESET_ON_BOOT:=0}"
 : "${CELERYBEAT_SCHEDULE_PATH:=celerybeat-schedule}"
 
-# --------- Helpers ----------
+# ================== Helpers ==================
 pids=()
 
 log_env_absence () {
@@ -49,7 +64,6 @@ purge_queues() {
   IFS=',' read -ra QLIST <<< "$QUEUES_TO_PURGE"
   echo "[entrypoint] Purging Celery queues: ${QLIST[*]}"
   for q in "${QLIST[@]}"; do
-    # -f = no preguntar, -Q = cola específica
     celery -A ms_main_load_data purge -Q "$q" -f || true
   done
 }
@@ -74,7 +88,6 @@ cleanup () {
       kill "$pid" || true
     fi
   done
-  # Espera que mueran prolijamente
   wait || true
 }
 trap cleanup EXIT INT TERM
@@ -94,12 +107,11 @@ wait_for_nodes () {
 }
 
 flower_available () {
-  # Flower registra un subcomando "flower" en 'celery'
   celery --help 2>/dev/null | grep -q 'flower' || return 1
   return 0
 }
 
-# --------- Limpiezas antes de arrancar ----------
+# ================== Limpiezas antes de arrancar ==================
 log_env_absence
 
 if [ "$PURGE_ON_BOOT" = "1" ]; then
@@ -112,14 +124,14 @@ if [ "$SCHEDULE_RESET_ON_BOOT" = "1" ]; then
   reset_beat_schedule
 fi
 
-# --------- Django setup ----------
+# ================== Django setup ==================
 echo "[entrypoint] Running Django setup..."
 python manage.py makemigrations
 python manage.py migrate
 python manage.py collectstatic --no-input
 python init_scripts.py
 
-# --------- Celery workers & beat ----------
+# ================== Celery workers & beat ==================
 echo "[entrypoint] Starting Celery workers and beat..."
 
 events_flag=""
@@ -127,13 +139,18 @@ if [ "${CELERY_EVENTS}" = "1" ]; then
   events_flag="-E"
 fi
 
-start_bg "celery -A ms_main_load_data worker -Q zoho_catalog -c ${ZOHO_CATALOG_CONCURRENCY} -n zoho_catalog@%h --loglevel=${CELERY_LOGLEVEL} ${events_flag}"
-start_bg "celery -A ms_main_load_data worker -Q zoho_sales -c ${ZOHO_SALES_CONCURRENCY} -n zoho_sales@%h --loglevel=${CELERY_LOGLEVEL} ${events_flag}"
-start_bg "celery -A ms_main_load_data worker -Q zoho_shipments -c ${ZOHO_SHIPMENTS_CONCURRENCY} -n zoho_shipments@%h --loglevel=${CELERY_LOGLEVEL} ${events_flag}"
-start_bg "celery -A ms_main_load_data worker -Q senitron -c ${SENITRON_CONCURRENCY} -n senitron@%h --loglevel=${CELERY_LOGLEVEL} ${events_flag}"
+# Flags comunes (pool prefork, fair scheduler, prefetch=1 y reciclado de procesos)
+COMMON_FLAGS="-O ${CELERY_OPTIMIZATION} --pool=prefork --prefetch-multiplier=${CELERY_PREFETCH} --max-tasks-per-child=${CELERY_MAX_TASKS_PER_CHILD}"
+
+# Cada worker con su time limit y concurrency específicos
+start_bg "celery -A ms_main_load_data worker -Q zoho_catalog   -c ${ZOHO_CATALOG_CONCURRENCY}   -n zoho_catalog@%h   --loglevel=${CELERY_LOGLEVEL} ${events_flag} ${COMMON_FLAGS} --soft-time-limit=${ZOHO_CATALOG_SOFT_TL} --time-limit=${ZOHO_CATALOG_HARD_TL}"
+start_bg "celery -A ms_main_load_data worker -Q zoho_sales     -c ${ZOHO_SALES_CONCURRENCY}     -n zoho_sales@%h     --loglevel=${CELERY_LOGLEVEL} ${events_flag} ${COMMON_FLAGS} --soft-time-limit=${ZOHO_SALES_SOFT_TL}   --time-limit=${ZOHO_SALES_HARD_TL}"
+start_bg "celery -A ms_main_load_data worker -Q zoho_shipments -c ${ZOHO_SHIPMENTS_CONCURRENCY} -n zoho_shipments@%h --loglevel=${CELERY_LOGLEVEL} ${events_flag} ${COMMON_FLAGS} --soft-time-limit=${ZOHO_SHIP_SOFT_TL}     --time-limit=${ZOHO_SHIP_HARD_TL}"
+start_bg "celery -A ms_main_load_data worker -Q senitron       -c ${SENITRON_CONCURRENCY}       -n senitron@%h       --loglevel=${CELERY_LOGLEVEL} ${events_flag} ${COMMON_FLAGS} --soft-time-limit=${SENITRON_SOFT_TL}       --time-limit=${SENITRON_HARD_TL}"
+
 start_bg "celery -A ms_main_load_data beat --loglevel=${CELERY_LOGLEVEL}"
 
-# --------- Flower (UI) con guard ----------
+# ================== Flower (UI) ==================
 if [ "${FLOWER_ENABLE}" = "1" ]; then
   if flower_available; then
     echo "[entrypoint] Starting Flower on :${FLOWER_PORT}${FLOWER_URL_PREFIX}"
@@ -146,7 +163,7 @@ if [ "${FLOWER_ENABLE}" = "1" ]; then
   fi
 fi
 
-# --------- Inspector loop (robusto) ----------
+# ================== Inspector loop ==================
 if [ "${INSPECTOR_INTERVAL}" != "0" ]; then
   wait_for_nodes || true
   start_bg "while true; do \
@@ -169,7 +186,7 @@ if [ "${INSPECTOR_INTERVAL}" != "0" ]; then
   done"
 fi
 
-# --------- Gunicorn (foreground) ----------
+# ================== Gunicorn (foreground) ==================
 echo "[entrypoint] Starting Gunicorn on :${PORT}"
 exec gunicorn ms_main_load_data.asgi:application \
   -w "${GUNICORN_WORKERS}" \
