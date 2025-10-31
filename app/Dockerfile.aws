@@ -42,23 +42,27 @@ RUN apt-get update
 
 # Copia el contenido del directorio al contenedor
 COPY . /app/
+# Eliminar celerybeat-schedule y ejecutar autoflake para limpiar el código
+RUN rm -f /app/celerybeat-schedule && \
+    pip install --no-cache-dir autoflake && \
+    autoflake -r --in-place \
+      --remove-all-unused-imports \
+      --remove-unused-variables \
+      --exclude "*/migrations/*,.venv,venv,__pycache__" \
+      .
 
-# Ejecutar autoflake para limpiar el código
-RUN pip install --no-cache-dir autoflake \
- && autoflake -r --in-place \
-    --remove-all-unused-imports \
-    --remove-unused-variables \
-    --exclude "*/migrations/*,.venv,venv,__pycache__" \
-    .
+COPY ./_deploy/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# Expose port 8000 for the Django application
-EXPOSE 8000
+# Puertos de app y Flower
+EXPOSE 8000 5555
 
-CMD ["sh", "-c", "python manage.py makemigrations && \
-                  python manage.py migrate && \
-                  python manage.py collectstatic --no-input && \
-                  python init_scripts.py && \
-                  celery -A ms_main_load_data worker -Q zoho -c 1 -n zoho@%h --loglevel=info -E & \
-                  celery -A ms_main_load_data worker -Q senitron -c 2 -n senitron@%h --loglevel=info -E & \
-                  celery -A ms_main_load_data beat --loglevel=info & \
-                  gunicorn ms_main_load_data.asgi:application -w 3 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"]
+# (Opcional) Credenciales por defecto de Flower (cámbialas en prod)
+ENV FLOWER_USER=admin \
+    FLOWER_PASSWORD=admin
+
+# (Opcional) Healthcheck para workers
+HEALTHCHECK --interval=60s --timeout=10s --retries=3 \
+  CMD celery -A ms_main_load_data inspect ping -d zoho@* -d senitron@* >/dev/null 2>&1 || exit 1
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

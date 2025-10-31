@@ -23,14 +23,19 @@ import warnings
 
 # DEBUG = True
 
-env = environ.Env(
-    DEBUG=(bool, False)
-)
+BASE_DIR = Path(__file__).resolve().parent.parent  # .../ms_main_load_data
+env = environ.Env()
 
-environ.Env.read_env()
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+# .env en la raíz del repo: .../app/.env
+env_file = BASE_DIR.parent / ".env"
+if env_file.exists():
+    environ.Env.read_env(str(env_file))
+else:
+    # Log amigable, sin ruido
+    import logging
+    logging.getLogger(__name__).warning(
+        "No .env at %s (ok if you inject env via Docker)", env_file
+    )
 
 
 # Quick-start development settings - unsuitable for production
@@ -57,40 +62,58 @@ LOGGING = {
         'null': {
             'class': 'logging.NullHandler',
         },
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
     },
     'formatters': {
         'verbose': {
-            'format': '%(asctime)s %(levelname)s %(name)s %(message)s'
+            'format': '[%(asctime)s] %(levelname)s %(name)s:%(lineno)d %(message)s'
         },
     },
+    "root": {
+        "handlers": ["console"],
+        "level": "WARNING",
+    },
     'loggers': {
+        "ms_load_from_zoho": {
+            "handlers": ["console"],
+            "level": "INFO",            # cambia a DEBUG si quieres
+            "propagate": False,         # evita doble log
+        },
+        "urllib3": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
         'django': {
-            'handlers': ['file'],
+            'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': True,
         },
         'celery': {
-            'handlers': ['file'],
+            'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': True,
         },
         'pymongo': {
-            'handlers': ['file'],     
+            'handlers': ['console'],
             'level': 'WARNING',
             'propagate': False,
         },
         'pymongo.command': {
-            'handlers': ['file'],
+            'handlers': ['console'],
             'level': 'WARNING',
             'propagate': False,
         },
         'pymongo.connection': {
-            'handlers': ['file'],
+            'handlers': ['console'],
             'level': 'WARNING',
             'propagate': False,
         },
         'pymongo.serverSelection': {
-            'handlers': ['file'],
+            'handlers': ['console'],
             'level': 'WARNING',
             'propagate': False,
         },
@@ -301,76 +324,196 @@ FRONTEND_URL = env('FRONTEND_URL', default='')
 
 ZOHO_ORG_ID_NWSHOME = env('ZOHO_ORG_ID_NWSHOME', default='')
 ZOHO_ORG_ID = env('ZOHO_ORG_ID', default='')
+TIMEDELTA_ZOHO_SHIPMENTS = env.int('TIMEDELTA_ZOHO_SHIPMENTS', default=1)
+TIMEDELTA_ZOHO_SALES_ORDERS = env.int('TIMEDELTA_ZOHO_SALES_ORDERS', default=3)
+TIMEDELTA_ZOHO_INVOICES = env.int('TIMEDELTA_ZOHO_INVOICES', default=2)
+TIMEDELTA_ZOHO_CUSTOMERS = env.int('TIMEDELTA_ZOHO_CUSTOMERS', default=3)
+TIMEDELTA_ZOHO_ITEMS = env.int('TIMEDELTA_ZOHO_ITEMS', default=3)
 
 # Celery
 
 CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='')
 CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default='')
-CELERY_TASKS_DELAY = env('CELERY_TASKS_DELAY', default=5)
+CELERY_TASK_IGNORE_RESULT = False
+CELERY_TASK_TRACK_STARTED = True
+CELERY_RESULT_EXTENDED = True
+CELERY_RESULT_EXPIRES = 86400  # 24h, evita que expire antes de encadenar
+
+from kombu import Queue, Exchange
+CELERY_TASK_DEFAULT_QUEUE = "zoho_shipments"  # <- evita default_queue=None
+CELERY_TASK_QUEUES = (
+    Queue("zoho_shipments",     Exchange("zoho_shipments",     type="direct"), routing_key="zoho_shipments"),
+    Queue("zoho_catalog",       Exchange("zoho_catalog",       type="direct"), routing_key="zoho_catalog"),
+    Queue("zoho_sales",         Exchange("zoho_sales",         type="direct"), routing_key="zoho_sales"),
+    Queue("senitron",           Exchange("senitron",           type="direct"), routing_key="senitron"),
+    # opcional: Queue("default", Exchange("default", type="direct"), routing_key="default"),
+)
+
+CELERY_TASK_ROUTES = {
+    # ZOHO
+    "ms_load_from_zoho.tasks.task_load_inventory_sales_orders": {
+        "queue": "zoho_sales", 
+        "routing_key": "zoho_sales"
+    },
+    "ms_load_from_zoho.tasks.task_load_books_invoices":         {
+        "queue": "zoho_sales", 
+        "routing_key": "zoho_sales"
+    },
+    "ms_load_from_zoho.tasks.task_load_books_customers":        {
+        "queue": "zoho_catalog", 
+        "routing_key": "zoho_catalog"
+    },
+    "ms_load_from_zoho.tasks.task_load_inventory_items":        {
+        "queue": "zoho_catalog", 
+        "routing_key": "zoho_catalog"
+    },
+    "ms_load_from_zoho.tasks.task_load_inventory_shipments":    {
+        "queue": "zoho_shipments", 
+        "routing_key": "zoho_shipments"
+    },
+    
+    # SENITRON
+    "ms_load_from_senitron.tasks.task_load_senitron_items_assets": {
+        "queue": "senitron",
+        "routing_key": "senitron"
+    },
+    "ms_load_from_senitron.tasks.task_load_senitron_items_assets_logs": {
+        "queue": "senitron",
+        "routing_key": "senitron"
+    },
+
+    # SEQUENCE TASKS
+    ## ZOHO
+    "ms_load_sequence_tasks.tasks.task_sequence_by_zoho_shipments": {
+        "queue": "zoho_shipments",
+        "routing_key": "zoho_shipments"
+    },
+    "ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales": {
+        "queue": "zoho_sales",
+        "routing_key": "zoho_sales"
+    },
+    "ms_load_sequence_tasks.tasks.task_sequence_by_zoho_customers_items": {
+        "queue": "zoho_catalog",
+        "routing_key": "zoho_catalog"
+    },
+    ## SENITRON
+    "ms_load_sequence_tasks.tasks.task_sequence_by_senitron": {
+        "queue": "senitron",
+        "routing_key": "senitron"
+    },
+    ## TINY ZOHO
+    "ms_load_sequence_tasks.tasks.tiny_sleep_zoho_shipments": {
+        "queue": "zoho_shipments",
+        "routing_key": "zoho_shipments"
+    },
+    "ms_load_sequence_tasks.tasks.tiny_sleep_zoho_sales": {
+        "queue": "zoho_sales",
+        "routing_key": "zoho_sales"
+    },
+    "ms_load_sequence_tasks.tasks.tiny_sleep_zoho_catalog": {
+        "queue": "zoho_catalog",
+        "routing_key": "zoho_catalog"
+    },
+    ## TINY SENITRON
+    "ms_load_sequence_tasks.tasks.tiny_sleep_senitron": {
+        "queue": "senitron",
+        "routing_key": "senitron"
+    },
+    
+    
+}
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'America/New_York'
 CELERY_ENABLE_UTC = False
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1        # importante
+CELERY_TASK_ACKS_LATE = True                 # reconoce al finalizar
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 7200}
+
+# --- Límites de tiempo por defecto (puedes afinarlos por tarea) ---
+CELERY_TASK_TIME_LIMIT = 900                 # hard kill 15 min
+CELERY_TASK_SOFT_TIME_LIMIT = 840            # aviso a los 14 min
+
+# --- Rate limit sólo para shipments (reduce 429) ---
+CELERY_TASK_ANNOTATIONS = {
+    # catálogos suelen ser voluminosos pero menos sensibles
+    'ms_load_from_zoho.tasks.task_load_books_customers': {'rate_limit': '6/m'},   # 1 cada 10s
+    'ms_load_from_zoho.tasks.task_load_inventory_items': {'rate_limit': '6/m'},
+
+    # ventas
+    'ms_load_from_zoho.tasks.task_load_inventory_sales_orders': {'rate_limit': '6/m'},
+    'ms_load_from_zoho.tasks.task_load_books_invoices':        {'rate_limit': '6/m'},
+
+    # shipments (detalles ya van serializados en tu service)
+    'ms_load_from_zoho.tasks.task_load_inventory_shipments':   {'rate_limit': '4/m'},
+}
 
 # CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # CELERY_BEAT
 DAY_OF_WEEK_MONDAY_TO_SATURDAY = env('DAY_OF_WEEK_MONDAY_TO_SATURDAY', default='mon-sat')
 DAY_OF_WEEK_SUNDAY = env('DAY_OF_WEEK_SUNDAY', default='sun')
+HOUR_MONDAY_TO_SATURDAY = env('HOUR_MONDAY_TO_SATURDAY', default='7-17')
+HOUR_SUNDAY = env('HOUR_SUNDAY', default='*/6')
 
-# CELERY_BEAT SHIPMENTS, SALES ORDERS, INVOICES
-MINUTE_ZOHO_SALES_MONDAY_TO_SATURDAY = env('MINUTE_ZOHO_SALES_MONDAY_TO_SATURDAY', default='*/30')
-HOUR_ZOHO_SALES_MONDAY_TO_SATURDAY = env('HOUR_ZOHO_SALES_MONDAY_TO_SATURDAY', default='7-17')
-MINUTE_ZOHO_SALES_SUNDAY = env('MINUTE_ZOHO_SALES_SUNDAY', default=0)
-HOUR_ZOHO_SALES_SUNDAY = env('HOUR_ZOHO_SALES_SUNDAY', default='*/6')
-
+# CELERY_BEAT ZOHO SCHEDULES
+MINUTE_ZOHO_SALES = env('MINUTE_ZOHO_SALES', default='4,14,24,34,44,54')
+MINUTE_ZOHO_CATALOG = env('MINUTE_ZOHO_CATALOG', default='6,16,26,36,46,56')
+MINUTE_ZOHO_SHIPMENTS = env('MINUTE_ZOHO_SHIPMENTS', default='2,12,22,32,42,52')
+# # SALES
 CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY = crontab(
-    minute=MINUTE_ZOHO_SALES_MONDAY_TO_SATURDAY, 
-    hour=HOUR_ZOHO_SALES_MONDAY_TO_SATURDAY, 
+    minute=MINUTE_ZOHO_SALES, 
+    hour=HOUR_MONDAY_TO_SATURDAY, 
     day_of_week=DAY_OF_WEEK_MONDAY_TO_SATURDAY
 )
 
 CRONTAB_ZOHO_SALES_SUNDAY = crontab(
-    minute=MINUTE_ZOHO_SALES_SUNDAY,
-    hour=HOUR_ZOHO_SALES_SUNDAY,
+    minute=MINUTE_ZOHO_SALES,
+    hour=HOUR_SUNDAY,
     day_of_week=DAY_OF_WEEK_SUNDAY
 )
 
-# CUSTOMERS, ITEMS
-MINUTE_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY = env('MINUTE_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY', default='*/30')
-HOUR_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY = env('HOUR_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY', default='7-17')
-MINUTE_ZOHO_CUSTOMERS_ITEMS_SUNDAY = env('MINUTE_ZOHO_CUSTOMERS_ITEMS_SUNDAY', default=30)
-HOUR_ZOHO_CUSTOMERS_ITEMS_SUNDAY = env('HOUR_ZOHO_CUSTOMERS_ITEMS_SUNDAY', default='*/12')
-
-CRONTAB_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY = crontab(
-    minute=MINUTE_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY, 
-    hour=HOUR_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY, 
+# # CUSTOMERS, ITEMS (CATALOG)
+CRONTAB_ZOHO_CATALOG_MONDAY_TO_SATURDAY = crontab(
+    minute=MINUTE_ZOHO_CATALOG,
+    hour=HOUR_MONDAY_TO_SATURDAY,
     day_of_week=DAY_OF_WEEK_MONDAY_TO_SATURDAY
 )
 
-CRONTAB_ZOHO_CUSTOMERS_ITEMS_SUNDAY = crontab(
-    minute=MINUTE_ZOHO_CUSTOMERS_ITEMS_SUNDAY,
-    hour=HOUR_ZOHO_CUSTOMERS_ITEMS_SUNDAY,
+CRONTAB_ZOHO_CATALOG_SUNDAY = crontab(
+    minute=MINUTE_ZOHO_CATALOG,
+    hour=HOUR_SUNDAY,
+    day_of_week=DAY_OF_WEEK_SUNDAY
+)
+
+# # SHIPMENTS
+CRONTAB_ZOHO_SHIPMENTS_MONDAY_TO_SATURDAY = crontab(
+    minute=MINUTE_ZOHO_SHIPMENTS,
+    hour=HOUR_MONDAY_TO_SATURDAY,
+    day_of_week=DAY_OF_WEEK_MONDAY_TO_SATURDAY
+)
+
+CRONTAB_ZOHO_SHIPMENTS_SUNDAY = crontab(
+    minute=MINUTE_ZOHO_SHIPMENTS,
+    hour=HOUR_SUNDAY,
     day_of_week=DAY_OF_WEEK_SUNDAY
 )
 
 # SENITRON
-MINUTE_SENITRON_MONDAY_TO_SATURDAY = env('MINUTE_SENITRON_MONDAY_TO_SATURDAY', default='*/10')
-HOUR_SENITRON_MONDAY_TO_SATURDAY = env('HOUR_SENITRON_MONDAY_TO_SATURDAY', default='7-17')
-MINUTE_SENITRON_SUNDAY = env('MINUTE_SENITRON_SUNDAY', default=5)
-HOUR_SENITRON_SUNDAY = env('HOUR_SENITRON_SUNDAY', default='*/2')
+MINUTE_SENITRON = env('MINUTE_SENITRON', default='0,10,20,30,40,50')
 
 CRONTAB_SENITRON_MONDAY_TO_SATURDAY = crontab(
-    minute=MINUTE_SENITRON_MONDAY_TO_SATURDAY,
-    hour=HOUR_SENITRON_MONDAY_TO_SATURDAY,
+    minute=MINUTE_SENITRON,
+    hour=HOUR_MONDAY_TO_SATURDAY,
     day_of_week=DAY_OF_WEEK_MONDAY_TO_SATURDAY
 )
 
 CRONTAB_SENITRON_SUNDAY = crontab(
-    minute=MINUTE_SENITRON_SUNDAY,
-    hour=HOUR_SENITRON_SUNDAY,
+    minute=MINUTE_SENITRON,
+    hour=HOUR_SUNDAY,
     day_of_week=DAY_OF_WEEK_SUNDAY
 )
 
@@ -378,33 +521,47 @@ CRONTAB_SENITRON_SUNDAY = crontab(
 CELERY_BEAT_SCHEDULE = {
     # MONDAY_TO_SATURDAY
     'run-task-sequence-zoho-customers-items-monday-saturday': {
-        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_customers_items',
-        'schedule': CRONTAB_ZOHO_CUSTOMERS_ITEMS_MONDAY_TO_SATURDAY,
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_customers_items',
+        'schedule': CRONTAB_ZOHO_CATALOG_MONDAY_TO_SATURDAY,
+        'options': {'queue': 'zoho_catalog'},        # <-- importante
     },
     'run-task-sequence-zoho-sales-monday-saturday': {
         'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales',
         'schedule': CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY,
+        'options': {'queue': 'zoho_sales'},        # <-- importante
     },
-    'run-task-sequence-senitron-monday-saturday': {
-        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
-        'schedule': CRONTAB_SENITRON_MONDAY_TO_SATURDAY,
+    'run-task-sequence-zoho-shipments-monday-saturday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_shipments',
+        'schedule': CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY,
+        'options': {'queue': 'zoho_shipments'},        # <-- importante
     },
-    
+    # 'run-task-sequence-senitron-monday-saturday': {
+    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
+    #     'schedule': CRONTAB_SENITRON_MONDAY_TO_SATURDAY,
+    #     'options': {'queue': 'senitron'},    # <-- importante
+    # },
 
     # SUNDAY
     'run-task-sequence-zoho-customers-items-sunday': {
-        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_customers_items',
-        'schedule': CRONTAB_ZOHO_CUSTOMERS_ITEMS_SUNDAY,
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_customers_items',
+        'schedule': CRONTAB_ZOHO_CATALOG_SUNDAY,
+        'options': {'queue': 'zoho_catalog'},
     },
     'run-task-sequence-zoho-sales-sunday': {
         'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales',
         'schedule': CRONTAB_ZOHO_SALES_SUNDAY,
+        'options': {'queue': 'zoho_sales'},        # <-- importante
     },
-    'run-task-sequence-senitron-sunday': {
-        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
-        'schedule': CRONTAB_SENITRON_SUNDAY,
+    'run-task-sequence-zoho-shipments-sunday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_shipments',
+        'schedule': CRONTAB_ZOHO_SHIPMENTS_SUNDAY,
+        'options': {'queue': 'zoho_shipments'},        # <-- importante
     },
-    
+    # 'run-task-sequence-senitron-sunday': {
+    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
+    #     'schedule': CRONTAB_SENITRON_SUNDAY,
+    #     'options': {'queue': 'senitron'},
+    # },
 }
 
 # MONGOENGINE

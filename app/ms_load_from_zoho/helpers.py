@@ -72,50 +72,72 @@ def _retry_session():
     s.mount("http://",  HTTPAdapter(max_retries=r))
     return s
 
-def zoho_get(session, url, headers, params, zoho_org_id, logger, timeout=40):
-    attempt = 0
-    last_exc = None
-    while attempt < ZOHO_MAX_ATTEMPTS:
-        attempt += 1
-        _global_rl.wait_for_slot()
+_SESSION = None
+def _session():
+    global _SESSION
+    if _SESSION is None:
+        _SESSION = requests.Session()
+        retries = Retry(
+            total=0,                # manejamos retries a mano para loggear
+            backoff_factor=0,       # sin backoff aquí
+            status_forcelist=[],    # lo controlamos nosotros
+        )
+        _SESSION.mount("https://", HTTPAdapter(max_retries=retries))
+    return _SESSION
+
+def zoho_get(session, url, headers, params, zoho_org_id, logger, timeout=30,
+             max_attempts=6, overall_deadline=240):
+    t0 = time.monotonic()
+    for attempt in range(1, max_attempts + 1):
+        # deadline global
+        if time.monotonic() - t0 > overall_deadline:
+            raise RuntimeError(f"Deadline exceeded {overall_deadline}s for {url}")
+
         try:
-            resp = session.get(url, headers=headers, params=params, timeout=timeout)
+            resp = _session().get(url, headers=headers, params=params, timeout=timeout)
+        except requests.Timeout:
+            wait = min(1.0 * attempt, 5.0)
+            logger.warning("Timeout %ss %s (attempt %d/%d). Sleeping %.1fs...",
+                           timeout, url, attempt, max_attempts, wait)
+            time.sleep(wait)
+            continue
+        except Exception as e:
+            wait = min(1.0 * attempt, 5.0)
+            logger.warning("Request error %s (attempt %d/%d). Sleeping %.1fs... err=%s",
+                           url, attempt, max_attempts, wait, e)
+            time.sleep(wait)
+            continue
 
-            if resp.status_code == 401:
-                new_token = refresh_zoho_access_token(zoho_org_id)
-                headers['Authorization'] = f'Zoho-oauthtoken {new_token}'
-                _global_rl.wait_for_slot()
-                resp = session.get(url, headers=headers, params=params, timeout=timeout)
-
-            if resp.status_code == 429:
-                retry_after = resp.headers.get("Retry-After")
-                if retry_after:
-                    try:
-                        sleep_s = max(1.0, float(retry_after))
-                    except Exception:
-                        sleep_s = ZOHO_429_FALLBACK_SLEEP
-                else:
-                    # <-- CAMBIO: espera fuerte (por defecto 60s) cuando no hay Retry-After
-                    sleep_s = ZOHO_429_FALLBACK_SLEEP
-                logger.warning(f"429 {url} (attempt {attempt}/{ZOHO_MAX_ATTEMPTS}). Sleeping {sleep_s:.1f}s...")
-                time.sleep(sleep_s)
-                continue
-
-            resp.raise_for_status()
+        if resp.status_code == 200:
             return resp
 
-        except requests.exceptions.RequestException as e:
-            last_exc = e
-            sleep_s = (ZOHO_BASE_BACKOFF ** attempt) + random() * ZOHO_JITTER_MAX
-            logger.warning(
-                f"Transient error on {url} (attempt {attempt}/{ZOHO_MAX_ATTEMPTS}): {e}. "
-                f"Sleeping {sleep_s:.1f}s..."
-            )
-            time.sleep(sleep_s)
+        if resp.status_code == 429:
+            # respeta Retry-After si viene
+            ra = resp.headers.get("Retry-After")
+            if ra:
+                try:
+                    wait = float(ra)
+                except ValueError:
+                    wait = 2.0
+            else:
+                # backoff exponencial suave
+                wait = round(1.2 + 0.6 * attempt, 1)
+            logger.warning("429 %s (attempt %d/%d). Sleeping %.1fs...", url, attempt, max_attempts, wait)
+            time.sleep(wait)
+            continue
 
-    if last_exc:
-        logger.error(f"Max attempts exceeded for {url}: {last_exc}")
-        raise last_exc
+        # 5xx -> backoff
+        if 500 <= resp.status_code < 600:
+            wait = round(0.8 + 0.4 * attempt, 1)
+            logger.warning("%s %s (attempt %d/%d). Sleeping %.1fs...",
+                           resp.status_code, url, attempt, max_attempts, wait)
+            time.sleep(wait)
+            continue
+
+        # 4xx duro distinto de 429 -> aborta con contexto
+        logger.error("HTTP %s in %s params=%s body=%s", resp.status_code, url, params, resp.text[:512])
+        resp.raise_for_status()
+
     raise RuntimeError(f"Max attempts exceeded for {url}")
 
 

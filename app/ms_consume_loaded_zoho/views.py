@@ -1,4 +1,3 @@
-from bson import json_util
 from mongoengine import Q
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from rest_framework import status
@@ -25,7 +24,7 @@ from ms_load_from_zoho.helpers import (
                                         config_headers,
                                         refresh_zoho_access_token,
 )
-from ms_load_from_zoho.views import (
+from ms_load_from_zoho.service_sales_orders import (
                                         fetch_sales_order_details
 )
 
@@ -34,7 +33,6 @@ from .utils import (
                     merge_list
 )
 from ms_util.utils import (
-                    filtered_queryset_from_only_fields,
                     filtered_list_from_only_fields,
                     _normalize_only_fields
 )
