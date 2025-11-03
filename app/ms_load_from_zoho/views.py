@@ -336,10 +336,11 @@ def metrics_panel(request):
                 </tr>""")
                 continue
             for org_id, m in sorted(per_org.items(), key=lambda kv: kv[0]):
+                org_name = 'NWS' if org_id == settings.ZOHO_ORG_ID else 'NWSHOME'
                 rows.append(f"""
                 <tr>
                   <td>{mod}</td>
-                  <td>{org_id}</td>
+                  <td>{org_name}</td>
                   <td>{m.get('last_run','')}</td>
                   <td>{m.get('last_sync_date','')}</td>
                   <td>{m.get('list_calls',0)}</td>

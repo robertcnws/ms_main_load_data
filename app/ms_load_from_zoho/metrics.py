@@ -147,7 +147,7 @@ def get_latest_metrics(
 
     except Exception:
         docs: List[IntegrationMetrics] = list(
-            IntegrationMetrics.objects(module=module).order_by("zoho_org_id", "-last_run_dt")
+            IntegrationMetrics.objects(module=module).order_by("-last_run_dt", "zoho_org_id")
         )
         per_org: Dict[str, Dict[str, Any]] = {}
         seen: set[str] = set()
