@@ -2,7 +2,7 @@
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from mongoengine import Q
-from datetime import datetime as dt, timedelta
+from datetime import datetime as dt, timedelta, timezone
 from django.conf import settings
 from django.http import JsonResponse
 from ms_load_from_zoho.models import AppConfig, ZohoFullInvoice, SyncMetadata
@@ -217,6 +217,11 @@ def load_invoices_service(start_date: str, zoho_org_id: str):
         updated = len(to_update)
 
     # ---- MÉTRICAS + RETURN
+    if status == "ok":
+        SyncMetadata.update_last_sync_date(
+            "last_sync_date_invoices",
+            dt.now(timezone.utc).strftime("%Y-%m-%d")
+        )
     duration = round(time.time()-t0, 3)
     set_metrics(
             "invoices",

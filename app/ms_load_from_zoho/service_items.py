@@ -238,6 +238,12 @@ def load_items_service(*, zoho_org_id: str, start_date: str | None = None, item_
 
     if timelines:
         TimelineItem.objects.insert(timelines)
+        
+    if status == "ok":
+        SyncMetadata.update_last_sync_date(
+            "last_sync_date_items",
+            dt.now(timezone.utc).strftime("%Y-%m-%d")
+        )
 
     duration = round(time.time() - t0, 3)
     set_metrics(
