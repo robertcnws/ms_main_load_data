@@ -17,6 +17,10 @@ from ms_load_from_zoho.models import (
     AppConfig,
     ZohoCustomer,
     SyncMetadata,
+    ZohoFullInvoice,
+    ZohoInventoryShipmentSalesOrder,
+    ZohoShipmentOrder,
+    ZohoPackage
 )
 from ms_load_from_zoho.manage_instances import create_books_customers_instance
 import ms_load_from_zoho.helpers as helpers
@@ -269,6 +273,14 @@ def load_customers_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
                     continue
                 setattr(dst, f, getattr(c, f))
             dst.save()
+            # Update Related Invoices
+            update_related_invoices(dst)
+            # Update Related Sales Orders
+            update_related_sales_orders(dst)
+            # Update Related Shipments
+            update_related_shipments(dst)
+            # Update Related Packages
+            update_related_packages(dst)
         updated = len(upd_customers)
 
     # Actualizar last_sync_date SOLO si no fue parcial por MAX_PAGES
@@ -314,3 +326,51 @@ def load_customers_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
         "sort": {"column": sort_column, "order": sort_order},
         "order_detected": "DESC" if detected_desc else "ASC/unknown",
     }
+
+def update_related_invoices(dst: ZohoCustomer):
+    logger.info("Updating related invoices for customer: %s", dst.contact_id)
+    invoices = ZohoFullInvoice.objects(customer_id=dst.contact_id)
+    for inv in invoices:
+        inv.customer_name = dst.customer_name if dst.customer_name else inv.customer_name
+        inv.email = dst.email if dst.email else inv.email
+        contact_details = list(inv.contact_persons_details)
+        existing_contact = next((cd for cd in contact_details if cd.get("contact_id") == dst.contact_id), None)
+        if existing_contact:
+            new_contacts = [cd for cd in contact_details if cd.get("contact_id") != dst.contact_id]
+            new_contacts.append({
+                "first_name": dst.first_name if (dst.first_name and dst.first_name != existing_contact.get("first_name")) else existing_contact.get("first_name"),
+                "last_name": dst.last_name if (dst.last_name and dst.last_name != existing_contact.get("last_name")) else existing_contact.get("last_name"),
+                "email": dst.email if (dst.email and dst.email != existing_contact.get("email")) else existing_contact.get("email"),
+                "phone": dst.phone if (dst.phone and dst.phone != existing_contact.get("phone")) else existing_contact.get("phone"),
+                "mobile": dst.mobile if (dst.mobile and dst.mobile != existing_contact.get("mobile")) else existing_contact.get("mobile")
+            })
+            inv.contact_persons_details = new_contacts
+        inv.save()
+    logger.info("%s Invoices updated for customer: %s", len(invoices), dst.contact_id)
+
+def update_related_sales_orders(dst: ZohoCustomer):
+    logger.info("Updating related sales orders for customer: %s", dst.contact_id)
+    sales_orders = ZohoInventoryShipmentSalesOrder.objects(customer_id=dst.contact_id)
+    for so in sales_orders:
+        so.customer_name = dst.customer_name if dst.customer_name else so.customer_name
+        so.save()
+    logger.info("%s Sales orders updated for customer: %s", len(sales_orders), dst.contact_id)
+    
+def update_related_shipments(dst: ZohoCustomer):
+    logger.info("Updating related shipments for customer: %s", dst.contact_id)
+    shipments = ZohoShipmentOrder.objects(customer_id=dst.contact_id)
+    for shipment in shipments:
+        shipment.customer_name = dst.customer_name if dst.customer_name else shipment.customer_name
+        shipment.save()
+    logger.info("%s Shipments updated for customer: %s", len(shipments), dst.contact_id)
+
+def update_related_packages(dst: ZohoCustomer):
+    logger.info("Updating related packages for customer: %s", dst.contact_id)
+    packages = ZohoPackage.objects(customer_id=dst.contact_id)
+    for package in packages:
+        package.customer_name = dst.customer_name if dst.customer_name else package.customer_name
+        package.email = dst.email if dst.email else package.email
+        package.phone = dst.phone if dst.phone else package.phone
+        package.mobile = dst.mobile if dst.mobile else package.mobile
+        package.save()
+    logger.info("%s Packages updated for customer: %s", len(packages), dst.contact_id)
