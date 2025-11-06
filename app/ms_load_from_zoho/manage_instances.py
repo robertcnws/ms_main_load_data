@@ -1,5 +1,6 @@
 from datetime import datetime as dt
 from django.utils import timezone
+from app.ms_load_from_zoho import itemgroup_instance
 from mongoengine import DoesNotExist, ValidationError
 from decimal import Decimal
 from .models import (
@@ -804,70 +805,5 @@ def create_books_invoice_instance(logger, data, zoho_org_id):
     
     return invoice
 
-def create_inventory_itemgroup_instance(logger, raw, zoho_org_id):
-    current_timezone = timezone.get_current_timezone()
-
-    created_time_str = raw.get('created_time')
-    created_time = dt.strptime(created_time_str, '%Y-%m-%dT%H:%M:%S%z') if created_time_str else None
-    if created_time and created_time.tzinfo is None:
-        created_time = current_timezone.localize(created_time)
-
-    last_modified_time_str = raw.get('last_modified_time')
-    last_modified_time = dt.strptime(last_modified_time_str, '%Y-%m-%dT%H:%M:%S%z') if last_modified_time_str else None
-    if last_modified_time and last_modified_time.tzinfo is None:
-        last_modified_time = current_timezone.localize(last_modified_time)
-
-    group_id = raw.get('group_id')
-    group_name = raw.get('group_name')
-    if not group_id or not group_name:
-        logger.error("Missing required fields for ZohoItemGroup (group_id or group_name)")
-        return None
-
-    product_type = raw.get('product_type')
-    brand = raw.get('brand')
-    manufacturer = raw.get('manufacturer')
-    unit = raw.get('unit')
-    description = raw.get('description')
-    is_taxable = raw.get('is_taxable', False)
-    tax_id = raw.get('tax_id')
-    tax_name = raw.get('tax_name')
-    tax_percentage = raw.get('tax_percentage')
-    tax_type = raw.get('tax_type')
-    tax_exemption_id = raw.get('tax_exemption_id')
-    attribute_id1 = raw.get('attribute_id1')
-    attribute_name1 = raw.get('attribute_name1')
-    status = raw.get('status')
-    source = raw.get('source')
-    image_id = raw.get('image_id')
-    image_name = raw.get('image_name')
-    image_type = raw.get('image_type')
-
-    item_group = ZohoItemGroup(
-        group_id=str(group_id),
-        group_name=str(group_name),
-        product_type=product_type,
-        brand=brand,
-        manufacturer=manufacturer,
-        unit=unit,
-        description=description,
-        is_taxable=bool(is_taxable),
-        tax_id=tax_id,
-        tax_name=tax_name,
-        tax_percentage=tax_percentage,
-        tax_type=tax_type,
-        tax_exemption_id=tax_exemption_id,
-        attribute_id1=attribute_id1,
-        attribute_name1=attribute_name1,
-        status=status,
-        source=source,
-        image_id=image_id,
-        image_name=image_name,
-        image_type=image_type,
-        created_time=created_time,
-        last_modified_time=last_modified_time,
-        zoho_org_id=zoho_org_id,
-    )
-
-    return item_group
-
-
+def create_inventory_itemgroup_instance(raw, zoho_org_id):
+    return itemgroup_instance.create_itemgroup_instance(raw, zoho_org_id)
