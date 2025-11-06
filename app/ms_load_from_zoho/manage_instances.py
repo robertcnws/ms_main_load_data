@@ -1,6 +1,6 @@
 from datetime import datetime as dt
 from django.utils import timezone
-from app.ms_load_from_zoho import itemgroup_instance
+from ms_load_from_zoho import itemgroup_instance
 from mongoengine import DoesNotExist, ValidationError
 from decimal import Decimal
 from .models import (

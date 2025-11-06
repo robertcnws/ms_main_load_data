@@ -201,27 +201,27 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
             db = ZohoItemGroup.objects(group_id=inst.group_id).first()
             if not db:
                 continue
-            db.group_name = inst.group_name
-            db.product_type = inst.product_type
-            db.brand = inst.brand
-            db.manufacturer = inst.manufacturer
-            db.unit = inst.unit
-            db.description = inst.description
-            db.is_taxable = inst.is_taxable
-            db.tax_id = inst.tax_id
-            db.tax_name = inst.tax_name
-            db.tax_percentage = inst.tax_percentage
-            db.tax_type = inst.tax_type
-            db.tax_exemption_id = inst.tax_exemption_id
-            db.attribute_id1 = inst.attribute_id1
-            db.attribute_name1 = inst.attribute_name1
-            db.status = inst.status
-            db.source = inst.source
-            db.image_id = inst.image_id
-            db.image_name = inst.image_name
-            db.image_type = inst.image_type
-            db.created_time = inst.created_time
-            db.last_modified_time = inst.last_modified_time
+            db.group_name = inst.group_name if inst.group_name else db.group_name
+            db.product_type = inst.product_type if inst.product_type else db.product_type
+            db.brand = inst.brand if inst.brand else db.brand
+            db.manufacturer = inst.manufacturer if inst.manufacturer else db.manufacturer
+            db.unit = inst.unit if inst.unit else db.unit
+            db.description = inst.description if inst.description else db.description
+            db.is_taxable = inst.is_taxable if inst.is_taxable is not None else db.is_taxable
+            db.tax_id = inst.tax_id if inst.tax_id else db.tax_id
+            db.tax_name = inst.tax_name if inst.tax_name else db.tax_name
+            db.tax_percentage = inst.tax_percentage if inst.tax_percentage else db.tax_percentage
+            db.tax_type = inst.tax_type if inst.tax_type else db.tax_type
+            db.tax_exemption_id = inst.tax_exemption_id if inst.tax_exemption_id else db.tax_exemption_id
+            db.attribute_id1 = inst.attribute_id1 if inst.attribute_id1 else db.attribute_id1
+            db.attribute_name1 = inst.attribute_name1 if inst.attribute_name1 else db.attribute_name1
+            db.status = inst.status if inst.status else db.status
+            db.source = inst.source if inst.source else db.source
+            db.image_id = inst.image_id if inst.image_id else db.image_id
+            db.image_name = inst.image_name if inst.image_name else db.image_name
+            db.image_type = inst.image_type if inst.image_type else db.image_type
+            db.created_time = inst.created_time if inst.created_time else db.created_time
+            db.last_modified_time = inst.last_modified_time if inst.last_modified_time else db.last_modified_time
             db.save()
         updated = len(to_update)
 
