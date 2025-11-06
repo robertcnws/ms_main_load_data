@@ -8,6 +8,7 @@ from email.utils import format_datetime
 
 import requests
 from django.conf import settings
+from ms_load_from_zoho.service_shipments import _iso_zoho_midnight_utc
 from mongoengine.queryset.visitor import Q
 
 from ms_load_from_zoho.metrics import now_iso, set_metrics
@@ -122,69 +123,57 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
     first_full_load = existing_groups == 0
     list_headers = headers.copy()
     if use_if_modified_since and not first_full_load:
-        list_headers["If-Modified-Since"] = format_datetime(cutoff_dt)
+        list_headers["If-Modified-Since"] = _iso_zoho_midnight_utc(cutoff_dt)
+        
+    
+    base_url = settings.ZOHO_INVENTORY_ITEMGROUPS_URL
+    params = {
+        "organization_id": app_config.zoho_org_id,
+        "per_page": 200,
+        "page": 1,
+    }
+    page = 1
+    has_more = True
+    stale_streak = 0
 
-    if item_number:
-        url = f"{settings.ZOHO_INVENTORY_ITEMGROUPS_URL}/{item_number}"
+    while has_more:
+        cur = params | {"page": page}
         try:
-            r = _get(url, list_headers, {"organization_id": app_config.zoho_org_id})
-            if r.status_code != 304:
-                it = r.json().get("item", {})
-                if it:
-                    lm = _lm_or_created(it)
-                    if first_full_load or not lm or lm >= cutoff_dt:
-                        itemgroups_to_process.append(it)
-        except requests.RequestException as e:
-            logger.error(f"{LOG_PREFIX} Error fetching single itemgroup={item_number}: {e}")
-    else:
-        base_url = settings.ZOHO_INVENTORY_ITEMGROUPS_URL
-        params = {
-            "organization_id": app_config.zoho_org_id,
-            "per_page": 200,
-            "page": 1,
-        }
-        page = 1
-        has_more = True
-        stale_streak = 0
-
-        while has_more:
-            cur = params | {"page": page}
-            try:
-                logger.debug(f"{LOG_PREFIX} LIST page={page}")
-                r = _get(base_url, list_headers, cur)
-                if use_if_modified_since and not first_full_load and r.status_code == 304 and page == 1:
-                    has_more = False
-                    break
-                data = r.json()
-                page_items = data.get("itemgroups", []) or []
-                has_more = data.get("page_context", {}).get("has_more_page", False)
-
-                if first_full_load:
-                    itemgroups_to_process.extend(page_items)
-                else:
-                    stale_count = 0
-                    recent = []
-                    for it in page_items:
-                        lm = _lm_or_created(it)
-                        if not lm or lm >= cutoff_dt:
-                            recent.append(it)
-                        else:
-                            stale_count += 1
-                    itemgroups_to_process.extend(recent)
-                    total = len(page_items) or 1
-                    if (stale_count / total) >= CUTOFF_STALE_RATIO:
-                        stale_streak += 1
-                    else:
-                        stale_streak = 0
-                    if stale_streak >= CUTOFF_STALE_STREAK:
-                        has_more = False
-
-                page += 1
-                time.sleep(LIST_PAGE_DELAY_SEC)
-            except requests.RequestException as e:
-                logger.error(f"{LOG_PREFIX} Error fetching itemgroups page={page}: {e}")
-                status = "error"
+            logger.debug(f"{LOG_PREFIX} LIST page={page}")
+            r = _get(base_url, list_headers, cur)
+            if use_if_modified_since and not first_full_load and r.status_code == 304 and page == 1:
+                has_more = False
                 break
+            data = r.json()
+            page_items = data.get("itemgroups", []) or []
+            has_more = data.get("page_context", {}).get("has_more_page", False)
+
+            if first_full_load:
+                itemgroups_to_process.extend(page_items)
+            else:
+                stale_count = 0
+                recent = []
+                for it in page_items:
+                    lm = _lm_or_created(it)
+                    if not lm or lm >= cutoff_dt:
+                        recent.append(it)
+                    else:
+                        stale_count += 1
+                itemgroups_to_process.extend(recent)
+                total = len(page_items) or 1
+                if (stale_count / total) >= CUTOFF_STALE_RATIO:
+                    stale_streak += 1
+                else:
+                    stale_streak = 0
+                if stale_streak >= CUTOFF_STALE_STREAK:
+                    has_more = False
+
+            page += 1
+            time.sleep(LIST_PAGE_DELAY_SEC)
+        except requests.RequestException as e:
+            logger.error(f"{LOG_PREFIX} Error fetching itemgroups page={page}: {e}")
+            status = "error"
+            break
 
     logger.info(f"{LOG_PREFIX} LIST after_cutoff count={len(itemgroups_to_process)} list_calls={list_calls}")
 
