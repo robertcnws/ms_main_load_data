@@ -2,6 +2,7 @@
 from celery import shared_task
 from django.conf import settings
 from ms_load_from_zoho.tasks import (
+    task_load_inventory_itemgroups,
     task_load_inventory_items,
     task_load_inventory_sales_orders,
     task_load_inventory_shipments,
@@ -29,7 +30,7 @@ def tiny_sleep_zoho_sales(seconds=5):
 @shared_task(queue="zoho_catalog")
 def tiny_sleep_zoho_catalog(seconds=5):
     time.sleep(seconds)
-    return "slept in ZOHO CATALOG (CUSTOMERS, ITEMS)"
+    return "slept in ZOHO CATALOG (CUSTOMERS, ITEMS, ITEMGROUPS)"
 
 @shared_task(queue="senitron")
 def tiny_sleep_senitron(seconds=5):
@@ -59,13 +60,15 @@ def task_sequence_by_zoho_sales():
 
 @shared_task(queue="zoho_catalog")
 def task_sequence_by_zoho_customers_items():
-    logger.info("Starting ZOHO customers/items chain: customers -> items")
+    logger.info("Starting ZOHO customers/items chain: customers -> items -> itemgroups")
     s1 = task_load_books_customers.si().set(queue="zoho_catalog")
     pause1 = tiny_sleep_zoho_catalog.si(2).set(queue="zoho_catalog")
     s2 = task_load_inventory_items.si().set(queue="zoho_catalog")
     pause2 = tiny_sleep_zoho_catalog.si(2).set(queue="zoho_catalog")
-    ar = (s1 | pause1 | s2 | pause2).apply_async()
-    logger.info("Chain zoho customers/items started: id=%s root_id=%s", ar.id, getattr(ar, "parent", None))
+    s3 = task_load_inventory_itemgroups.si().set(queue="zoho_catalog")
+    pause3 = tiny_sleep_zoho_catalog.si(2).set(queue="zoho_catalog")
+    ar = (s1 | pause1 | s2 | pause2 | s3 | pause3).apply_async()
+    logger.info("Chain zoho customers/items/itemgroups started: id=%s root_id=%s", ar.id, getattr(ar, "parent", None))
 
 
 @shared_task(queue="senitron")

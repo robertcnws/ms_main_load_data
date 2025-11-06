@@ -3,6 +3,7 @@ from ms_load_from_zoho.service_customers import load_customers_service
 from ms_load_from_zoho.service_invoices import load_invoices_service
 from ms_load_from_zoho.service_items import load_items_service
 from ms_load_from_zoho.service_sales_orders import load_sales_orders_service
+from ms_load_from_zoho.service_itemgroups import load_itemgroups_service
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from datetime import datetime, timedelta
@@ -41,6 +42,24 @@ def task_load_inventory_items():
             logger.exception("Items task failed for org=%s: %s", org, e)
 
     return "Task Inventory Items Completed"
+
+
+@shared_task(queue="zoho_catalog")
+def task_load_inventory_itemgroups():
+    logger.info("ZOHO: inventory itemgroups TASK START")
+    apps = AppConfig.objects.all()
+    last_sync = SyncMetadata.get_last_sync_date('last_sync_date_itemgroups')
+    last_sync_date = datetime.strptime(last_sync, "%Y-%m-%d") if last_sync else None
+    days_before = (last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_ITEMS)).strftime("%Y-%m-%d") \
+                if last_sync_date else None
+    for org in apps:
+        try:
+            res = load_itemgroups_service(start_date=days_before, zoho_org_id=org.zoho_org_id)
+            logger.info("Itemgroups task org=%s -> %s", org, res)
+        except Exception as e:
+            logger.exception("Itemgroups task failed for org=%s: %s", org, e)
+
+    return "Task Inventory Itemgroups Completed"
 
 
 @shared_task(queue="zoho_catalog")

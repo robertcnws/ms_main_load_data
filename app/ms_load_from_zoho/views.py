@@ -5,6 +5,7 @@ from ms_load_from_zoho.service_customers import load_customers_service
 from ms_load_from_zoho.service_invoices import load_invoices_service
 from ms_load_from_zoho.service_items import load_items_service
 from ms_load_from_zoho.service_sales_orders import load_sales_orders_service
+from ms_load_from_zoho.service_itemgroups import load_itemgroups_service
 from datetime import datetime as dt, timezone as tz
 from typing import Optional
 from django.http import JsonResponse
@@ -106,6 +107,29 @@ def load_inventory_items(request, zoho_org_id):
     start_date: Optional[str] = data.get("start_date")
     item_number: Optional[str] = data.get("item_number")
     result = load_items_service(zoho_org_id=zoho_org_id, start_date=start_date, item_number=item_number)
+
+    status = 200 if result.get("status") == "ok" else 500
+    return JsonResponse(result, status=status)
+
+
+# =========================
+# INVENTORY ITEMGROUPS
+# =========================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def load_inventory_itemgroups(request, zoho_org_id):
+    try:
+        if request.body:
+            data = json.loads(request.body)
+        else:
+            data = {}
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    start_date: Optional[str] = data.get("start_date")
+    item_number: Optional[str] = data.get("item_number")
+    result = load_itemgroups_service(zoho_org_id=zoho_org_id, start_date=start_date, item_number=item_number)
 
     status = 200 if result.get("status") == "ok" else 500
     return JsonResponse(result, status=status)
