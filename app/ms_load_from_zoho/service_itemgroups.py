@@ -18,10 +18,10 @@ from .manage_instances import create_inventory_itemgroup_instance
 logger = logging.getLogger(__name__)
 LOG_PREFIX = "[ITEMGROUPS]"
 
-# Heurísticas de corte (tuneables por ENV)
 CUTOFF_STALE_RATIO = float(os.getenv("ZOHO_ITEMGROUPS_CUTOFF_STALE_RATIO", "0.9"))
 CUTOFF_STALE_STREAK = int(os.getenv("ZOHO_ITEMGROUPS_CUTOFF_STALE_STREAK", "2"))
 LIST_PAGE_DELAY_SEC = float(os.getenv("ZOHO_LIST_PAGE_DELAY_SEC", "1"))
+
 
 def _parse_zoho_ts(value: str | None):
     if not value:
@@ -33,14 +33,28 @@ def _parse_zoho_ts(value: str | None):
             pass
     return None
 
+
 def _lm_or_created(item: dict):
-    return _parse_zoho_ts(item.get("last_modified_time")) or _parse_zoho_ts(item.get("created_time"))
+    for k in ("last_modified_time", "last_modified_time_formatted", "modified_time", "updated_time"):
+        v = item.get(k)
+        if v:
+            ts = _parse_zoho_ts(v)
+            if ts:
+                return ts
+    for k in ("created_time", "created_time_formatted", "create_time"):
+        v = item.get(k)
+        if v:
+            ts = _parse_zoho_ts(v)
+            if ts:
+                return ts
+    return None
+
 
 def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, item_number: str | None = None, use_if_modified_since: bool = True):
     t0 = time.time()
     list_calls = created = updated = 0
     status = "ok"
-    
+
     existing_groups = ZohoItemGroup.objects().count()
     logger.info(f"{LOG_PREFIX} Existing groups count: {existing_groups}, org={zoho_org_id}")
     if existing_groups == 0:
@@ -89,9 +103,6 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
         raise
 
     session = helpers._retry_session()
-    ims_headers = headers.copy()
-    if use_if_modified_since:
-        ims_headers["If-Modified-Since"] = format_datetime(cutoff_dt)
 
     def _get(url, hdrs, params):
         nonlocal list_calls
@@ -108,65 +119,65 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
 
     itemgroups_to_process = []
 
+    first_full_load = existing_groups == 0
+    list_headers = headers.copy()
+    if use_if_modified_since and not first_full_load:
+        list_headers["If-Modified-Since"] = format_datetime(cutoff_dt)
+
     if item_number:
-        # SINGLE
         url = f"{settings.ZOHO_INVENTORY_ITEMGROUPS_URL}/{item_number}"
         try:
-            r = _get(url, ims_headers if use_if_modified_since else headers, {"organization_id": app_config.zoho_org_id})
+            r = _get(url, list_headers, {"organization_id": app_config.zoho_org_id})
             if r.status_code != 304:
                 it = r.json().get("item", {})
                 if it:
                     lm = _lm_or_created(it)
-                    if not lm or lm >= cutoff_dt:
+                    if first_full_load or not lm or lm >= cutoff_dt:
                         itemgroups_to_process.append(it)
         except requests.RequestException as e:
             logger.error(f"{LOG_PREFIX} Error fetching single itemgroup={item_number}: {e}")
     else:
-        # LIST PAGINADO
         base_url = settings.ZOHO_INVENTORY_ITEMGROUPS_URL
-        start_date = dt.strptime(start_date, '%Y-%m-%d')
-        last_modified_time = start_date.strftime('%Y-%m-%d') + 'T00:00:00+0000'
         params = {
             "organization_id": app_config.zoho_org_id,
             "per_page": 200,
             "page": 1,
-            "last_modified_time": last_modified_time,
         }
         page = 1
         has_more = True
         stale_streak = 0
-        hdrs_for_list = ims_headers if use_if_modified_since else headers
 
         while has_more:
             cur = params | {"page": page}
             try:
                 logger.debug(f"{LOG_PREFIX} LIST page={page}")
-                r = _get(base_url, hdrs_for_list, cur)
-                if use_if_modified_since and r.status_code == 304 and page == 1:
+                r = _get(base_url, list_headers, cur)
+                if use_if_modified_since and not first_full_load and r.status_code == 304 and page == 1:
                     has_more = False
                     break
                 data = r.json()
                 page_items = data.get("itemgroups", []) or []
                 has_more = data.get("page_context", {}).get("has_more_page", False)
-                
-                stale_count = 0
-                recent = []
-                for it in page_items:
-                    lm = _lm_or_created(it)
-                    if lm and lm >= cutoff_dt:
-                        recent.append(it)
-                    else:
-                        stale_count += 1
 
-                itemgroups_to_process.extend(recent)
-                
-                total = len(page_items) or 1
-                if (stale_count / total) >= CUTOFF_STALE_RATIO:
-                    stale_streak += 1
+                if first_full_load:
+                    itemgroups_to_process.extend(page_items)
                 else:
-                    stale_streak = 0
-                if stale_streak >= CUTOFF_STALE_STREAK:
-                    has_more = False
+                    stale_count = 0
+                    recent = []
+                    for it in page_items:
+                        lm = _lm_or_created(it)
+                        if not lm or lm >= cutoff_dt:
+                            recent.append(it)
+                        else:
+                            stale_count += 1
+                    itemgroups_to_process.extend(recent)
+                    total = len(page_items) or 1
+                    if (stale_count / total) >= CUTOFF_STALE_RATIO:
+                        stale_streak += 1
+                    else:
+                        stale_streak = 0
+                    if stale_streak >= CUTOFF_STALE_STREAK:
+                        has_more = False
 
                 page += 1
                 time.sleep(LIST_PAGE_DELAY_SEC)
@@ -177,12 +188,11 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
 
     logger.info(f"{LOG_PREFIX} LIST after_cutoff count={len(itemgroups_to_process)} list_calls={list_calls}")
 
-    # UPSERT
     ids = [it.get("group_id") for it in itemgroups_to_process if it.get("group_id")]
     existing = ZohoItemGroup.objects(Q(group_id__in=ids))
     existing_map = {doc.group_id: doc for doc in existing}
 
-    new_docs, to_update, timelines = [], [], []
+    new_docs, to_update = [], []
     for raw in itemgroups_to_process:
         inst = create_inventory_itemgroup_instance(logger, raw, zoho_org_id)
         if not inst:
@@ -202,14 +212,30 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
             db = ZohoItemGroup.objects(group_id=inst.group_id).first()
             if not db:
                 continue
-            # Update fields as necessary
-            # ------------
+            db.group_name = inst.group_name
+            db.product_type = inst.product_type
+            db.brand = inst.brand
+            db.manufacturer = inst.manufacturer
+            db.unit = inst.unit
+            db.description = inst.description
+            db.is_taxable = inst.is_taxable
+            db.tax_id = inst.tax_id
+            db.tax_name = inst.tax_name
+            db.tax_percentage = inst.tax_percentage
+            db.tax_type = inst.tax_type
+            db.tax_exemption_id = inst.tax_exemption_id
+            db.attribute_id1 = inst.attribute_id1
+            db.attribute_name1 = inst.attribute_name1
+            db.status = inst.status
+            db.source = inst.source
+            db.image_id = inst.image_id
+            db.image_name = inst.image_name
+            db.image_type = inst.image_type
+            db.created_time = inst.created_time
+            db.last_modified_time = inst.last_modified_time
             db.save()
         updated = len(to_update)
 
-    if timelines:
-        TimelineItem.objects.insert(timelines)
-        
     if status == "ok":
         SyncMetadata.update_last_sync_date(
             "last_sync_date_itemgroups",
@@ -218,18 +244,18 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
 
     duration = round(time.time() - t0, 3)
     set_metrics(
-            "itemgroups",
-            zoho_org_id=zoho_org_id,
-            last_run=now_iso(),
-            last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_itemgroups") or "",
-            list_calls=list_calls,
-            detail_calls=0,
-            package_calls=0,
-            created=created,
-            updated=updated,
-            duration_sec=duration,
-            status=status,
-        )
+        "itemgroups",
+        zoho_org_id=zoho_org_id,
+        last_run=now_iso(),
+        last_sync_date=SyncMetadata.get_last_sync_date("last_sync_date_itemgroups") or "",
+        list_calls=list_calls,
+        detail_calls=0,
+        package_calls=0,
+        created=created,
+        updated=updated,
+        duration_sec=duration,
+        status=status,
+    )
 
     logger.info(f"{LOG_PREFIX} END created={created} updated={updated} list_calls={list_calls} duration_sec={duration} status={status}")
 
