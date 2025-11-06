@@ -252,6 +252,7 @@ def metrics_panel(request):
 
     defaults = {
         'items':        {'last_sync_date': _lsd('last_sync_date_items')},
+        'itemgroups':   {'last_sync_date': _lsd('last_sync_date_itemgroups')},
         'salesorders':  {'last_sync_date': _lsd('last_sync_date_salesorders')},
         'shipments':    {'last_sync_date': _lsd('last_sync_date_shipments')},
         'invoices':     {'last_sync_date': _lsd('last_sync_date_invoices')},

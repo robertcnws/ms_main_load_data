@@ -41,7 +41,11 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
     list_calls = created = updated = 0
     status = "ok"
     
-    if start_date:
+    existing_groups = ZohoItemGroup.objects().count()
+    logger.info(f"{LOG_PREFIX} Existing groups count: {existing_groups}, org={zoho_org_id}")
+    if existing_groups == 0:
+        cutoff_dt = dt(2017, 1, 1, tzinfo=timezone.utc)
+    elif start_date:
         try:
             cutoff_dt = dt.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         except ValueError:
@@ -49,7 +53,6 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
     else:
         last_sync = SyncMetadata.get_last_sync_date("last_sync_date_itemgroups")
         if last_sync:
-            # last_sync viene en ISO; si no es aware, lo forzamos a UTC
             try:
                 cutoff_dt = dt.fromisoformat(last_sync)
                 if cutoff_dt.tzinfo is None:
@@ -58,12 +61,6 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
                     cutoff_dt = cutoff_dt.astimezone(timezone.utc)
             except Exception:
                 cutoff_dt = dt.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        else:
-            existing_groups = ZohoItemGroup.objects().count()
-            if existing_groups > 0:
-                cutoff_dt = dt.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-            else:
-                cutoff_dt = dt(2000, 1, 1, tzinfo=timezone.utc)
 
     logger.info(f"{LOG_PREFIX} START zoho_org_id={zoho_org_id} cutoff={cutoff_dt.isoformat()} group_id={item_number}")
 
