@@ -567,6 +567,7 @@ class ZohoItemGroup(Document):
     image_type = StringField(null=True)
     created_time = DateTimeField(null=True)
     last_modified_time = DateTimeField(null=True)
+    zoho_org_id = StringField(null=True)
 
     meta = {
         "collection": "zoho_item_group",

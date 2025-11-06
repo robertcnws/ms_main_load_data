@@ -865,6 +865,7 @@ def create_inventory_itemgroup_instance(logger, raw, zoho_org_id):
         image_type=image_type,
         created_time=created_time,
         last_modified_time=last_modified_time,
+        zoho_org_id=zoho_org_id,
     )
 
     return item_group

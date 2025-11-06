@@ -65,7 +65,7 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
             else:
                 cutoff_dt = dt(2000, 1, 1, tzinfo=timezone.utc)
 
-    logger.info(f"{LOG_PREFIX} START zoho_org_id={zoho_org_id} cutoff={cutoff_dt.isoformat()} itemgroup_id={item_number}")
+    logger.info(f"{LOG_PREFIX} START zoho_org_id={zoho_org_id} cutoff={cutoff_dt.isoformat()} group_id={item_number}")
 
     app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
     if not app_config:
@@ -182,7 +182,7 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
 
     # UPSERT
     ids = [it.get("group_id") for it in itemgroups_to_process if it.get("group_id")]
-    existing = ZohoItemGroup.objects(Q(itemgroup_id__in=ids))
+    existing = ZohoItemGroup.objects(Q(group_id__in=ids))
     existing_map = {doc.group_id: doc for doc in existing}
 
     new_docs, to_update, timelines = [], [], []
