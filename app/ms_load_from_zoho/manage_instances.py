@@ -803,3 +803,6 @@ def create_books_invoice_instance(logger, data, zoho_org_id):
     
     return invoice
 
+def create_inventory_itemgroup_instance(logger, raw, zoho_org_id):
+    pass
+

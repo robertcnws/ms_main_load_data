@@ -1,37 +1,29 @@
 from mongoengine import (
-                            Document, 
-                            StringField, 
-                            BooleanField, 
-                            DateTimeField, 
-                            IntField, 
-                            DecimalField, 
-                            DateTimeField, 
-                            BooleanField, 
-                            StringField, 
-                            DateTimeField, 
-                            BooleanField, 
-                            StringField, 
-                            DateTimeField,
-                            ListField,
-                            DynamicField,
-                            DictField,
-                            FloatField,
-                            ReferenceField,
-                            DateTimeField,
-                            DateField,
-                            NULLIFY
-                        )
-from mongoengine import fields
-
+    Document,
+    StringField,
+    BooleanField,
+    DateTimeField,
+    IntField,
+    DecimalField,
+    ListField,
+    DynamicField,
+    DictField,
+    FloatField,
+    ReferenceField,
+    DateField,
+    NULLIFY,
+    fields,
+)
 from django.utils import timezone
 from datetime import datetime, timezone as dt_timezone
+
 
 class AppConfig(Document):
     zoho_client_id = StringField(max_length=255, null=True)
     zoho_client_secret = StringField(max_length=255, null=True)
     zoho_org_id = StringField(max_length=255, null=True)
     zoho_redirect_uri = StringField(max_length=255, null=True)
-    zoho_refresh_time = fields.IntField(null=True) 
+    zoho_refresh_time = fields.IntField(null=True)
     zoho_refresh_token = StringField(max_length=255, null=True)
     zoho_connection_configured = BooleanField(default=False)
     zoho_last_sync_time = DateTimeField(null=True)
@@ -62,22 +54,22 @@ class AppConfig(Document):
 
 
 class ZohoInventoryItem(Document):
-    group_id = IntField(null=True)  
+    group_id = IntField(null=True)
     group_name = StringField(max_length=255)
-    item_id = StringField(max_length=255, unique=True)  
+    item_id = StringField(max_length=255, unique=True)
     name = StringField(max_length=255)
     status = StringField(max_length=50)
     source = StringField(max_length=255)
     is_linked_with_zohocrm = BooleanField()
     item_type = StringField(max_length=50)
-    description = StringField(null=True)  
-    rate = DecimalField(precision=2)  
+    description = StringField(null=True)
+    rate = DecimalField(precision=2)
     is_taxable = BooleanField()
     tax_id = IntField(null=True)
     tax_name = StringField(max_length=255, null=True)
-    tax_percentage = DecimalField(precision=2, null=True)  
+    tax_percentage = DecimalField(precision=2, null=True)
     purchase_description = StringField(null=True)
-    purchase_rate = DecimalField(precision=2, null=True)  
+    purchase_rate = DecimalField(precision=2, null=True)
     is_combo_product = BooleanField()
     product_type = StringField(max_length=50)
     attribute_id1 = IntField(null=True)
@@ -111,10 +103,11 @@ class ZohoInventoryItem(Document):
     def __str__(self):
         return self.name
 
+
 class ZohoInventoryShipmentSalesOrder(Document):
     salesorder_id = StringField(max_length=255, unique=True)
     salesorder_number = StringField(max_length=255, null=True)
-    date = DateTimeField(null=True) 
+    date = DateTimeField(null=True)
     status = StringField(max_length=100, null=True)
     customer_id = StringField(max_length=255, null=True)
     customer_name = StringField(max_length=255, null=True)
@@ -131,24 +124,21 @@ class ZohoInventoryShipmentSalesOrder(Document):
     sub_total = FloatField(default=0, null=True)
     tax_total = FloatField(default=0, null=True)
     total = FloatField(default=0, null=True)
-    created_by_email = StringField(max_length=255, null=True) 
+    created_by_email = StringField(max_length=255, null=True)
     created_by_name = StringField(max_length=255, null=True)
     salesperson_id = StringField(max_length=255, null=True)
     salesperson_name = StringField(max_length=255, null=True)
     is_test_order = BooleanField(default=False)
-    notes = StringField(null=True) 
+    notes = StringField(null=True)
     payment_terms = IntField(default=0)
     payment_terms_label = StringField(max_length=255, null=True)
-
-    # JSONFields
-    line_items = ListField(DynamicField(), default=list, null=True)
-    shipping_address = DynamicField(null=True)
-    billing_address = DynamicField(null=True)
-    warehouses = ListField(DynamicField(), default=list, null=True)
-    custom_fields = ListField(DynamicField(), default=list, null=True)
-    order_sub_statuses = ListField(DynamicField(), default=list, null=True)
-    shipment_sub_statuses = ListField(DynamicField(), default=list, null=True)
-
+    line_items = ListField(DynamicField(), default=list)
+    shipping_address = DynamicField(default=dict)
+    billing_address = DynamicField(default=dict)
+    warehouses = ListField(DynamicField(), default=list)
+    custom_fields = ListField(DynamicField(), default=list)
+    order_sub_statuses = ListField(DynamicField(), default=list)
+    shipment_sub_statuses = ListField(DynamicField(), default=list)
     created_time = DateTimeField(null=True)
     last_modified_time = DateTimeField(null=True)
     zoho_org_id = StringField(max_length=255, null=True)
@@ -196,11 +186,11 @@ class ZohoShipmentOrder(Document):
     is_taxable = BooleanField(default=True)
     tax_id = StringField(max_length=255, null=True)
     tax_name = StringField(max_length=255, null=True)
-    tax_percentage = DecimalField(precision=2, default=0)  
+    tax_percentage = DecimalField(precision=2, default=0)
     currency_id = StringField(max_length=255, null=True)
     currency_code = StringField(max_length=255, null=True)
     currency_symbol = StringField(max_length=255, null=True)
-    exchange_rate = DecimalField(precision=4, default=1) 
+    exchange_rate = DecimalField(precision=4, default=1)
     discount = DecimalField(precision=2, default=0)
     is_discount_before_tax = BooleanField()
     discount_type = StringField(max_length=255, null=True)
@@ -232,19 +222,18 @@ class ZohoShipmentOrder(Document):
     associated_packages_count = IntField(default=0)
     created_by_id = StringField(max_length=255, null=True)
     last_modified_by_id = StringField(max_length=255, null=True)
-
-    contact_persons = ListField(DynamicField(), default=list, null=True)
-    invoices = ListField(DynamicField(), default=list, null=True)
-    line_items = ListField(DynamicField(), default=list, null=True)
-    packages = ListField(DynamicField(), default=list, null=True)
-    billing_address = DynamicField(null=True)
-    shipping_address = DynamicField(null=True)
-    custom_fields = ListField(DynamicField(), default=list, null=True)
-    custom_field_hash = DynamicField(null=True)
-    documents = ListField(DynamicField(), default=list, null=True)
-    taxes = ListField(DynamicField(), default=list, null=True)
-    tracking_statuses = ListField(DynamicField(), default=list, null=True)
-    multipiece_shipments = ListField(DynamicField(), default=list, null=True)
+    contact_persons = ListField(DynamicField(), default=list)
+    invoices = ListField(DynamicField(), default=list)
+    line_items = ListField(DynamicField(), default=list)
+    packages = ListField(DynamicField(), default=list)
+    billing_address = DynamicField(default=dict)
+    shipping_address = DynamicField(default=dict)
+    custom_fields = ListField(DynamicField(), default=list)
+    custom_field_hash = DynamicField(default=dict)
+    documents = ListField(DynamicField(), default=list)
+    taxes = ListField(DynamicField(), default=list)
+    tracking_statuses = ListField(DynamicField(), default=list)
+    multipiece_shipments = ListField(DynamicField(), default=list)
     zoho_org_id = StringField(max_length=255, null=True)
 
     meta = {
@@ -271,7 +260,7 @@ class ZohoPackage(Document):
     salesorder_fulfilment_status = StringField(max_length=255, null=True)
     shipment_id = StringField(max_length=255, null=True)
     shipment_number = StringField(max_length=255, null=True)
-    shipment_order = DynamicField(null=True)
+    shipment_order = DynamicField(default=dict)
     package_number = StringField(max_length=255, null=True)
     date = DateTimeField(null=True)
     shipping_date = DateTimeField(null=True)
@@ -291,10 +280,10 @@ class ZohoPackage(Document):
     total_quantity = DecimalField(precision=2, default=0)
     customer_id = StringField(max_length=255, null=True)
     customer_name = StringField(max_length=255, null=True)
-    email = StringField(null=True)  # EmailField → StringField
+    email = StringField(null=True)
     phone = StringField(max_length=255, null=True)
     mobile = StringField(max_length=255, null=True)
-    contact_persons = DynamicField(null=True)
+    contact_persons = DynamicField(default=list)
     created_by_id = StringField(max_length=255, null=True)
     last_modified_by_id = StringField(max_length=255, null=True)
     created_time = DateTimeField(null=True)
@@ -303,23 +292,17 @@ class ZohoPackage(Document):
     terms = StringField(null=True)
     is_emailed = BooleanField(default=False)
     is_advanced_tracking_missing = BooleanField(default=False)
-    line_items = DynamicField(null=True)
-    custom_fields = DynamicField(null=True)
-    custom_field_hash = DynamicField(null=True)
-    shipmentorder_custom_fields = DynamicField(null=True)
-    billing_address = DynamicField(null=True)
-    shipping_address = DynamicField(null=True)
-    picklists = DynamicField(null=True)
+    line_items = DynamicField(default=list)
+    custom_fields = DynamicField(default=dict)
+    custom_field_hash = DynamicField(default=dict)
+    shipmentorder_custom_fields = DynamicField(default=dict)
+    billing_address = DynamicField(default=dict)
+    shipping_address = DynamicField(default=dict)
+    picklists = DynamicField(default=list)
     template_id = StringField(max_length=255, null=True)
     template_name = StringField(max_length=255, null=True)
     template_type = StringField(max_length=255, null=True)
-    
-    zoho_shipment = ReferenceField(
-        'ZohoShipmentOrder',
-        dbref=False,             
-        reverse_delete_rule=NULLIFY
-    )
-    
+    zoho_shipment = ReferenceField('ZohoShipmentOrder', dbref=False, reverse_delete_rule=NULLIFY)
     zoho_org_id = StringField(max_length=255, null=True)
 
     meta = {
@@ -352,7 +335,6 @@ class ZohoCustomer(Document):
     last_modified_time = DateTimeField(required=True)
     last_modified_time_formatted = StringField(max_length=255, required=True)
     qb_list_id = StringField(max_length=255, null=True)
-    
     contact_type = StringField(max_length=50, required=True)
     has_transaction = BooleanField(default=False)
     is_linked_with_zohocrm = BooleanField(default=False)
@@ -387,13 +369,11 @@ class ZohoCustomer(Document):
     is_tds_applicable = BooleanField(default=False)
     vst_treatment = StringField(max_length=255, null=True)
     gst_treatment = StringField(max_length=255, null=True)
-    
     custom_fields = ListField(DynamicField(), default=list)
-    billing_address = DynamicField()
-    shipping_address = DynamicField()
+    billing_address = DynamicField(default=dict)
+    shipping_address = DynamicField(default=dict)
     contact_persons = ListField(DynamicField(), default=list)
-    default_templates = DynamicField()
-    
+    default_templates = DynamicField(default=dict)
     zoho_org_id = StringField(max_length=255, null=True)
 
     meta = {
@@ -404,7 +384,7 @@ class ZohoCustomer(Document):
         ],
         'verbose_name': 'Zoho Books Customer',
         'verbose_name_plural': 'Zoho Books Customers',
-        'strict': False  # Permite campos no definidos explícitamente
+        'strict': False
     }
 
     def save(self, *args, **kwargs):
@@ -414,7 +394,6 @@ class ZohoCustomer(Document):
             if not ZohoCustomer.objects(contact_id=self.contact_id).first() and not ZohoCustomer.objects(email=self.email).first():
                 return super(ZohoCustomer, self).save(*args, **kwargs)
             else:
-                # Manejar el caso donde el cliente ya existe
                 pass
 
     def __str__(self):
@@ -439,8 +418,8 @@ class TimelineItem(Document):
 
     def __str__(self):
         return f"Item {self.item_number} - {self.actual_stock_on_hand or 'N/A'} - {self.date_actual_stock_on_hand or 'N/A'}"
-    
-    
+
+
 class ZohoFullInvoice(Document):
     invoice_id = StringField(max_length=255, unique=True)
     invoice_number = StringField(max_length=255, required=True)
@@ -454,14 +433,11 @@ class ZohoFullInvoice(Document):
     payment_terms = IntField(null=True)
     payment_terms_label = StringField(max_length=255, null=True)
     payment_reminder_enabled = BooleanField(default=False)
-    
     payment_discount = DecimalField(precision=2, default=0.0)
     credits_applied = DecimalField(precision=2, default=0.0)
     payment_made = DecimalField(precision=2, default=0.0)
     reference_number = StringField(max_length=255, null=True)
-    
-    line_items = ListField(DynamicField(), default=list, null=True)
-
+    line_items = ListField(DynamicField(), default=list)
     allow_partial_payments = BooleanField(default=False)
     price_precision = IntField(default=2, null=True)
     sub_total = DecimalField(precision=2, default=0.0)
@@ -481,47 +457,38 @@ class ZohoFullInvoice(Document):
     sub_total_inclusive_of_tax = DecimalField(precision=2, default=0.0)
     contact_category = StringField(max_length=255, null=True)
     tax_rounding = StringField(max_length=255, null=True)
-    
-    taxes = ListField(DynamicField(), default=list, null=True)
+    taxes = ListField(DynamicField(), default=list)
     tds_calculation_type = StringField(max_length=255, null=True)
     last_payment_date = DateTimeField(null=True)
-    contact_persons = ListField(DynamicField(), default=list, null=True)
-
+    contact_persons = ListField(DynamicField(), default=list)
     salesorder_id = StringField(max_length=255, null=True)
     salesorder_number = StringField(max_length=255, null=True)
-    salesorders = ListField(DynamicField(), default=list, null=True)
-    contact_persons_details = ListField(DynamicField(), default=list, null=True)
+    salesorders = ListField(DynamicField(), default=list)
+    contact_persons_details = ListField(DynamicField(), default=list)
     created_time = DateTimeField(null=True)
     last_modified_time = DateTimeField(null=True)
     created_date = DateTimeField(null=True)
     created_by_name = StringField(max_length=255, null=True)
     estimate_id = StringField(max_length=255, null=True)
-    
-    customer_default_billing_address = DictField(default=dict, null=True)
-
+    customer_default_billing_address = DictField(default=dict)
     notes = StringField(null=True)
     terms = StringField(null=True)
-
-    billing_address = DictField(default=dict, null=True)
-    shipping_address = DictField(default=dict, null=True)
+    billing_address = DictField(default=dict)
+    shipping_address = DictField(default=dict)
     contact = DictField(default=dict)
-
     inserted_in_qb = BooleanField(default=False)
-    items_unmatched = ListField(DynamicField(), default=list, null=True)
-    customer_unmatched = ListField(DynamicField(), default=list, null=True)
+    items_unmatched = ListField(DynamicField(), default=list)
+    customer_unmatched = ListField(DynamicField(), default=list)
     force_to_sync = BooleanField(default=False)
-    
     last_sync_date = DateTimeField(default=timezone.now)
-
     number_of_times_synced = IntField(default=0, null=True)
     all_items_matched = BooleanField(default=False)
     all_customer_matched = BooleanField(default=False)
     qb_customer_list_id = StringField(max_length=255, null=True)
-    
     zoho_org_id = StringField(max_length=255, null=True)
 
     meta = {
-        'collection': 'zoho_full_invoice', 
+        'collection': 'zoho_full_invoice',
         'indexes': [
             'invoice_id',
             'invoice_number',
@@ -532,12 +499,12 @@ class ZohoFullInvoice(Document):
 
     def __str__(self):
         return f"{self.invoice_number} - {self.customer_name}"
-    
-    
+
+
 class SyncMetadata(Document):
     key = StringField(required=True, unique=True)
     value = StringField(required=True)
-    
+
     @staticmethod
     def get_last_sync_date(key):
         record = SyncMetadata.objects(key=key).first()
@@ -552,20 +519,20 @@ class SyncMetadata(Document):
         SyncMetadata.objects(key=key).update_one(
             set__value=date_str, upsert=True
         )
-        
+
+
 class IntegrationMetrics(Document):
-    module = StringField(required=True)              # items | salesorders | shipments | invoices | customers ...
-    zoho_org_id = StringField(required=True)         # org al que corresponde la corrida
-    last_run_dt = DateTimeField(required=True)       # timestamp real
-    last_sync_date = DateField(null=True)            # YYYY-MM-DD (lo guardamos como date)
+    module = StringField(required=True)
+    zoho_org_id = StringField(required=True)
+    last_run_dt = DateTimeField(required=True)
+    last_sync_date = DateField(null=True)
     list_calls = IntField(default=0)
     detail_calls = IntField(default=0)
     package_calls = IntField(default=0)
     created = IntField(default=0)
     updated = IntField(default=0)
     duration_sec = FloatField(default=0.0)
-    status = StringField(default="ok")               # ok | partial | error
-    # útil para ordenar rápidamente en paneles
+    status = StringField(default="ok")
     updated_at = DateTimeField(default=datetime.now(dt_timezone.utc))
 
     meta = {
@@ -574,4 +541,41 @@ class IntegrationMetrics(Document):
             {"fields": ["module", "zoho_org_id", "-last_run_dt"], "unique": False},
             {"fields": ["module", "-updated_at"], "unique": False},
         ],
+    }
+
+
+class ZohoItemGroup(Document):
+    group_id = StringField(required=True, unique=True)
+    group_name = StringField(required=True)
+    product_type = StringField(null=True)
+    brand = StringField(null=True)
+    manufacturer = StringField(null=True)
+    unit = StringField(null=True)
+    description = StringField(null=True)
+    is_taxable = BooleanField(default=False)
+    tax_id = StringField(null=True)
+    tax_name = StringField(null=True)
+    tax_percentage = DecimalField(precision=6, null=True)
+    tax_type = StringField(null=True)
+    tax_exemption_id = StringField(null=True)
+    attribute_id1 = StringField(null=True)
+    attribute_name1 = StringField(null=True)
+    status = StringField(null=True)
+    source = StringField(null=True)
+    image_id = StringField(null=True)
+    image_name = StringField(null=True)
+    image_type = StringField(null=True)
+    created_time = DateTimeField(null=True)
+    last_modified_time = DateTimeField(null=True)
+
+    meta = {
+        "collection": "zoho_item_group",
+        "indexes": [
+            {"fields": ["group_id"], "unique": True},
+            "group_name",
+            "status",
+            "product_type",
+        ],
+        "strict": False,
+        "auto_create_index": True,
     }
