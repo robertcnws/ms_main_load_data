@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from django.conf import settings
-from app.ms_util.utils import to_tz_iso8601
+from ms_util.utils import to_tz_iso8601
 from mongoengine.queryset.visitor import Q
 
 from ms_load_from_zoho import helpers
