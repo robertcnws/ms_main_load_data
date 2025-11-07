@@ -95,6 +95,7 @@ class ZohoInventoryItem(Document):
     synced_with_senitron = BooleanField(default=False)
     ignore_errors = BooleanField(default=False)
     zoho_org_id = StringField(max_length=255, null=True)
+    dealerportal_image = StringField(max_length=255, null=True)
 
     meta = {
         'collection': 'zoho_inventory_item'

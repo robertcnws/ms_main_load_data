@@ -130,6 +130,7 @@ python manage.py makemigrations
 python manage.py migrate
 python manage.py collectstatic --no-input
 python init_scripts.py
+# python manage.py sync_images_from_pg --verbose
 
 # ================== Celery workers & beat ==================
 echo "[entrypoint] Starting Celery workers and beat..."
