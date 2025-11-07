@@ -133,8 +133,9 @@ def load_sales_orders_service(start_date: Optional[str], zoho_org_id: str) -> Di
                 pass
         start_date = to_tz_iso8601(base)
 
-    start_anchor = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    last_modified_time = to_tz_iso8601(start_anchor)
+    # start_anchor = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    # last_modified_time = to_tz_iso8601(start_date)
+    last_modified_time = start_date
     cutoff_dt = _parse_zoho_ts(last_modified_time)
 
     # headers base
