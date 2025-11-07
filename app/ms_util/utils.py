@@ -1,4 +1,7 @@
 from bson.objectid import ObjectId
+from __future__ import annotations
+from datetime import datetime, date, time
+from zoneinfo import ZoneInfo
 
 def _normalize_only_fields(only_fields_str, DocCls):
     if not only_fields_str:
@@ -41,3 +44,41 @@ def filtered_list_from_only_fields(docs, requested_fields, valid_fields, db_fiel
             raw['_id'] = _id
             items.append(raw)
     return items
+
+
+def to_tz_iso8601(
+    dt_or_str: str | datetime | date,
+    target_tz: str = "America/New_York",
+    source_tz: str = "UTC",
+) -> str:
+    """
+    Convierte una fecha/hora a la zona `target_tz` y la devuelve como string
+    con formato 'YYYY-MM-DDTHH:MM:SS±HHMM'.
+
+    - Admite ISO 8601 con offset (p.ej. '2025-11-07T14:06:03.000+00:00' o '...Z')
+      y descarta milisegundos.
+    - Si recibe un datetime naive, asume `source_tz`.
+    - Si recibe un date, usa las 00:00:00 en `source_tz`.
+    """
+    # Normaliza la entrada a datetime
+    if isinstance(dt_or_str, datetime):
+        dt = dt_or_str
+    elif isinstance(dt_or_str, date):
+        dt = datetime.combine(dt_or_str, time(0, 0, 0))
+    elif isinstance(dt_or_str, str):
+        s = dt_or_str.strip()
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+    else:
+        raise TypeError("dt_or_str debe ser str, datetime o date")
+
+    # Si es naive, asigna tz de origen
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo(source_tz))
+
+    # Convierte a tz de destino
+    dt_local = dt.astimezone(ZoneInfo(target_tz))
+
+    # Devuelve sin milisegundos, con offset sin dos puntos (±HHMM)
+    return dt_local.strftime("%Y-%m-%dT%H:%M:%S%z")

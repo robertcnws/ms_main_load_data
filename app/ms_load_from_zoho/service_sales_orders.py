@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from django.conf import settings
+from app.ms_util.utils import to_tz_iso8601
 from mongoengine.queryset.visitor import Q
 
 from ms_load_from_zoho import helpers
@@ -130,10 +131,10 @@ def load_sales_orders_service(start_date: Optional[str], zoho_org_id: str) -> Di
                 base = datetime.strptime(last_sync, "%Y-%m-%d").replace(tzinfo=timezone.utc)
             except Exception:
                 pass
-        start_date = base.strftime("%Y-%m-%d")
+        start_date = to_tz_iso8601(base)
 
     start_anchor = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-    last_modified_time = _iso_zoho_midnight_utc(start_anchor)
+    last_modified_time = to_tz_iso8601(start_anchor)
     cutoff_dt = _parse_zoho_ts(last_modified_time)
 
     # headers base

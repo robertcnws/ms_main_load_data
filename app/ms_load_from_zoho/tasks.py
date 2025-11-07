@@ -1,4 +1,5 @@
 import os
+from ms_util.utils import to_tz_iso8601
 from ms_load_from_zoho.service_customers import load_customers_service
 from ms_load_from_zoho.service_invoices import load_invoices_service
 from ms_load_from_zoho.service_items import load_items_service
@@ -8,7 +9,7 @@ from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from datetime import datetime, timedelta
 from django.http import HttpRequest
-from .models import AppConfig, SyncMetadata
+from .models import AppConfig, SyncMetadata, IntegrationMetrics
 from django.conf import settings
 from ms_load_from_zoho.service_shipments import load_shipments_service
 import json
@@ -100,21 +101,30 @@ def task_load_inventory_sales_orders():
     try:
         apps = AppConfig.objects.all()
 
-        last_sync = SyncMetadata.get_last_sync_date('last_sync_date_salesorders')
-        last_sync_date = datetime.strptime(last_sync, "%Y-%m-%d") if last_sync else None
+        # last_sync = SyncMetadata.get_last_sync_date('last_sync_date_salesorders')
+        # last_sync_date = datetime.strptime(last_sync, "%Y-%m-%d") if last_sync else None
+
+        im_sales_orders = IntegrationMetrics.objects(module='salesorders')
 
         now_date = datetime.now()
-        days_before_now = (now_date - timedelta(days=settings.TIMEDELTA_ZOHO_SALES_ORDERS)).strftime("%Y-%m-%d")
-        # Si hay last_sync, retrocede TIMEDELTA desde esa fecha; si no, desde hoy
-        days_before = (
-            (last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_SALES_ORDERS)).strftime("%Y-%m-%d")
-            if last_sync_date else days_before_now
-        )
+        days_before_now = now_date - timedelta(days=settings.TIMEDELTA_ZOHO_SALES_ORDERS)
+        # # Si hay last_sync, retrocede TIMEDELTA desde esa fecha; si no, desde hoy
+        # days_before = (
+        #     (last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_SALES_ORDERS)).strftime("%Y-%m-%d")
+        #     if last_sync_date else days_before_now
+        # )
 
         bad_orgs = []
 
         for org in apps:
             try:
+                last_sync_date = im_sales_orders.get(zoho_org_id=org.zoho_org_id).last_run_dt
+                days_before = (
+                    last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_SALES_ORDERS)
+                    if last_sync_date else days_before_now
+                )
+                days_before = to_tz_iso8601(days_before)
+                logger.info("Sales Orders org=%s -> datetime=%s", org.zoho_org_id, days_before)
                 res = load_sales_orders_service(start_date=days_before, zoho_org_id=org.zoho_org_id)
                 status = res.get("status", "ok")
                 logger.info(

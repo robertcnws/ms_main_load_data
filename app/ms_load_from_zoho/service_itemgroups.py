@@ -183,7 +183,7 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
 
     new_docs, to_update = [], []
     for raw in itemgroups_to_process:
-        inst = create_inventory_itemgroup_instance(logger, raw, zoho_org_id)
+        inst = create_inventory_itemgroup_instance(raw, zoho_org_id)
         if not inst:
             continue
         prev = existing_map.get(inst.group_id)
