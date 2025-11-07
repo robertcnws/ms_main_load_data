@@ -60,15 +60,22 @@ def task_sequence_by_zoho_sales():
 
 @shared_task(queue="zoho_catalog")
 def task_sequence_by_zoho_customers_items():
-    logger.info("Starting ZOHO customers/items chain: customers -> items -> itemgroups")
+    logger.info("Starting ZOHO customers/items chain: customers -> items")
     s1 = task_load_books_customers.si().set(queue="zoho_catalog")
     pause1 = tiny_sleep_zoho_catalog.si(2, after='customers load').set(queue="zoho_catalog")
     s2 = task_load_inventory_items.si().set(queue="zoho_catalog")
     pause2 = tiny_sleep_zoho_catalog.si(2, after='items load').set(queue="zoho_catalog")
-    s3 = task_load_inventory_itemgroups.si().set(queue="zoho_catalog")
-    pause3 = tiny_sleep_zoho_catalog.si(2, after='itemgroups load').set(queue="zoho_catalog")
-    ar = (s1 | pause1 | s2 | pause2 | s3 | pause3).apply_async()
-    logger.info("Chain zoho customers/items/itemgroups started: id=%s root_id=%s", ar.id, getattr(ar, "parent", None))
+    ar = (s1 | pause1 | s2 | pause2).apply_async()
+    logger.info("Chain zoho customers/items started: id=%s root_id=%s", ar.id, getattr(ar, "parent", None))
+    
+    
+@shared_task(queue="zoho_catalog")
+def task_sequence_by_zoho_itemgroups():
+    logger.info("Starting ZOHO itemgroups chain: itemgroups")
+    s1 = task_load_inventory_itemgroups.si().set(queue="zoho_catalog")
+    pause1 = tiny_sleep_zoho_catalog.si(2, after='itemgroups load').set(queue="zoho_catalog")
+    ar = (s1 | pause1).apply_async()
+    logger.info("Chain zoho itemgroups started: id=%s root_id=%s", ar.id, getattr(ar, "parent", None))
 
 
 @shared_task(queue="senitron")

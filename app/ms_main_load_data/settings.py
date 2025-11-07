@@ -469,6 +469,7 @@ HOUR_SUNDAY = env('HOUR_SUNDAY', default='*/6')
 
 # CELERY_BEAT ZOHO SCHEDULES
 MINUTE_ZOHO_SALES = env('MINUTE_ZOHO_SALES', default='6,16,26,36,46,56')
+MINUTE_ZOHO_ITEMGROUPS = env('MINUTE_ZOHO_ITEMGROUPS', default='5')
 MINUTE_ZOHO_CATALOG = env('MINUTE_ZOHO_CATALOG', default='9,19,29,39,49,59')
 MINUTE_ZOHO_SHIPMENTS = env('MINUTE_ZOHO_SHIPMENTS', default='3,13,23,33,43,53')
 # # SALES
@@ -493,6 +494,19 @@ CRONTAB_ZOHO_CATALOG_MONDAY_TO_SATURDAY = crontab(
 
 CRONTAB_ZOHO_CATALOG_SUNDAY = crontab(
     minute=MINUTE_ZOHO_CATALOG,
+    hour=HOUR_SUNDAY,
+    day_of_week=DAY_OF_WEEK_SUNDAY
+)
+
+# # ITEMGROUPS (CATALOG)
+CRONTAB_ZOHO_ITEMGROUPS_MONDAY_TO_SATURDAY = crontab(
+    minute=MINUTE_ZOHO_ITEMGROUPS,
+    hour='*/1',
+    day_of_week=DAY_OF_WEEK_MONDAY_TO_SATURDAY
+)
+
+CRONTAB_ZOHO_ITEMGROUPS_SUNDAY = crontab(
+    minute=MINUTE_ZOHO_ITEMGROUPS,
     hour=HOUR_SUNDAY,
     day_of_week=DAY_OF_WEEK_SUNDAY
 )
@@ -533,6 +547,11 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': CRONTAB_ZOHO_CATALOG_MONDAY_TO_SATURDAY,
         'options': {'queue': 'zoho_catalog'},        # <-- importante
     },
+    'run-task-sequence-zoho-itemgroups-monday-saturday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_itemgroups',
+        'schedule': CRONTAB_ZOHO_ITEMGROUPS_MONDAY_TO_SATURDAY,
+        'options': {'queue': 'zoho_catalog'},        # <-- importante
+    },
     'run-task-sequence-zoho-sales-monday-saturday': {
         'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales',
         'schedule': CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY,
@@ -554,6 +573,11 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_customers_items',
         'schedule': CRONTAB_ZOHO_CATALOG_SUNDAY,
         'options': {'queue': 'zoho_catalog'},
+    },
+    'run-task-sequence-zoho-itemgroups-sunday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_itemgroups',
+        'schedule': CRONTAB_ZOHO_ITEMGROUPS_SUNDAY,
+        'options': {'queue': 'zoho_catalog'},        # <-- importante
     },
     'run-task-sequence-zoho-sales-sunday': {
         'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales',
