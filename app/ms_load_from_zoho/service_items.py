@@ -1,13 +1,13 @@
 # services/items_service.py
 import os
 import time
-import json
 import logging
 from datetime import datetime as dt, timezone
 from email.utils import format_datetime
 
 import requests
 from django.conf import settings
+from ms_util.utils import to_tz_iso8601
 from mongoengine.queryset.visitor import Q
 
 from ms_load_from_zoho.metrics import now_iso, set_metrics
@@ -41,25 +41,17 @@ def load_items_service(*, zoho_org_id: str, start_date: str | None = None, item_
     list_calls = created = updated = 0
     status = "ok"
     
-    if start_date:
-        try:
-            cutoff_dt = dt.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-        except ValueError:
-            raise ValueError("Invalid start_date format. Use YYYY-MM-DD")
-    else:
+    if not start_date:
         last_sync = SyncMetadata.get_last_sync_date("last_sync_date_items")
+        base = dt.now(timezone.utc)
         if last_sync:
-            # last_sync viene en ISO; si no es aware, lo forzamos a UTC
             try:
-                cutoff_dt = dt.fromisoformat(last_sync)
-                if cutoff_dt.tzinfo is None:
-                    cutoff_dt = cutoff_dt.replace(tzinfo=timezone.utc)
-                else:
-                    cutoff_dt = cutoff_dt.astimezone(timezone.utc)
+                base = dt.strptime(last_sync, "%Y-%m-%d").replace(tzinfo=timezone.utc)
             except Exception:
-                cutoff_dt = dt.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        else:
-            cutoff_dt = dt.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+                pass
+        start_date = to_tz_iso8601(base)
+        
+    cutoff_dt = _parse_zoho_ts(last_modified_time)
 
     logger.info(f"{LOG_PREFIX} START zoho_org_id={zoho_org_id} cutoff={cutoff_dt.isoformat()} item_number={item_number}")
 
@@ -123,8 +115,9 @@ def load_items_service(*, zoho_org_id: str, start_date: str | None = None, item_
     else:
         # LIST PAGINADO
         base_url = settings.ZOHO_INVENTORY_ITEMS_URL
-        start_date = dt.strptime(start_date, '%Y-%m-%d')
-        last_modified_time = start_date.strftime('%Y-%m-%d') + 'T00:00:00+0000'
+        # start_date = dt.strptime(start_date, '%Y-%m-%d')
+        # last_modified_time = start_date.strftime('%Y-%m-%d') + 'T00:00:00+0000'
+        last_modified_time = start_date
         params = {
             "organization_id": app_config.zoho_org_id,
             "per_page": 200,

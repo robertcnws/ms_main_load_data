@@ -29,14 +29,23 @@ def _mk_request(payload: dict) -> HttpRequest:
 def task_load_inventory_items():
     logger.info("ZOHO: inventory items TASK START")
     apps = AppConfig.objects.all()
-    last_sync = SyncMetadata.get_last_sync_date('last_sync_date_items')
-    last_sync_date = datetime.strptime(last_sync, "%Y-%m-%d") if last_sync else None
+    # last_sync = SyncMetadata.get_last_sync_date('last_sync_date_items')
+    # last_sync_date = datetime.strptime(last_sync, "%Y-%m-%d") if last_sync else None
+    im_items = IntegrationMetrics.objects(module='items')
+
     now_date = datetime.now()
-    days_before_now = (now_date - timedelta(days=settings.TIMEDELTA_ZOHO_ITEMS)).strftime("%Y-%m-%d")
-    days_before = (last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_ITEMS)).strftime("%Y-%m-%d") \
-                if last_sync_date else days_before_now
+    days_before_now = now_date - timedelta(days=settings.TIMEDELTA_ZOHO_ITEMS)
+    # days_before = (last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_ITEMS)).strftime("%Y-%m-%d") \
+    #             if last_sync_date else days_before_now
     for org in apps:
         try:
+            last_sync_date = im_items.get(zoho_org_id=org.zoho_org_id).last_run_dt
+            days_before = (
+                last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_ITEMS)
+                if last_sync_date else days_before_now
+            )
+            days_before = to_tz_iso8601(days_before)
+            logger.info("Items org=%s -> datetime=%s", org.zoho_org_id, days_before)
             res = load_items_service(start_date=days_before, zoho_org_id=org.zoho_org_id)
             logger.info("Items task org=%s -> %s", org, res)
         except Exception as e:
