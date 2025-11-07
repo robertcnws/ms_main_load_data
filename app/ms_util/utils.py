@@ -1,5 +1,4 @@
 from bson.objectid import ObjectId
-from __future__ import annotations
 from datetime import datetime, date, time
 from zoneinfo import ZoneInfo
 
