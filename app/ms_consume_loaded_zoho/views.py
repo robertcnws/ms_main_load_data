@@ -1002,23 +1002,29 @@ def invoices_to_rewards_points(request):
     zoho_org_id = params.get('zoho_org_id', None)
     if zoho_org_id:
         queryset = queryset.filter(zoho_org_id=zoho_org_id)
+        
+        
+    customer_id = params.get('customer_id', None)
+    if customer_id:
+        queryset = queryset.filter(customer_id=customer_id)
 
     invoices_in_zoho_nws = list(queryset)
+    
+    only_fields = params.get('only_fields', None)
+    if only_fields:
+        requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoFullInvoice)
+        if valid_for_only:
+            invoices_in_zoho_nws = filtered_list_from_only_fields(
+                invoices_in_zoho_nws,
+                requested_fields=requested,
+                valid_fields=valid_for_only,
+                db_field_map=db_field_map
+            )
     
     invoices_in_zoho_nws = [
         transform_data_to_mongo(invoice) for invoice in invoices_in_zoho_nws \
         if invoice.zoho_org_id == settings.ZOHO_ORG_ID
     ]
-    
-    only_fields = params.get('only_fields', None)
-    requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoFullInvoice)
-    if valid_for_only:
-        invoices_in_zoho_nws = filtered_list_from_only_fields(
-            invoices_in_zoho_nws,
-            requested_fields=requested,
-            valid_fields=valid_for_only,
-            db_field_map=db_field_map
-        )
     
     return Response({
         'count': len(invoices_in_zoho_nws),
