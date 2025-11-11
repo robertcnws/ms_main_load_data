@@ -36,7 +36,7 @@ def _parse_zoho_ts(value: str | None):
 def _lm_or_created(item: dict):
     return _parse_zoho_ts(item.get("last_modified_time")) or _parse_zoho_ts(item.get("created_time"))
 
-def load_items_service(*, zoho_org_id: str, start_date: str | None = None, item_number: str | None = None, use_if_modified_since: bool = True):
+def load_items_service(*, start_date: str | None = None, zoho_org_id: str, item_number: str | None = None, use_if_modified_since: bool = True):
     t0 = time.time()
     list_calls = created = updated = 0
     status = "ok"
@@ -51,7 +51,7 @@ def load_items_service(*, zoho_org_id: str, start_date: str | None = None, item_
                 pass
         start_date = to_tz_iso8601(base)
         
-    cutoff_dt = _parse_zoho_ts(last_modified_time)
+    cutoff_dt = _parse_zoho_ts(start_date)
 
     logger.info(f"{LOG_PREFIX} START zoho_org_id={zoho_org_id} cutoff={cutoff_dt.isoformat()} item_number={item_number}")
 
