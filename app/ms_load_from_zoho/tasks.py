@@ -41,7 +41,7 @@ def task_load_inventory_items():
         try:
             last_sync_date = im_items.get(zoho_org_id=org.zoho_org_id).last_run_dt
             days_before = (
-                last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_ITEMS + 4)
+                last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_ITEMS)
                 if last_sync_date else days_before_now
             )
             days_before = to_tz_iso8601(days_before)
