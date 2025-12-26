@@ -163,10 +163,11 @@ def generate_auth_url(zoho_org_id):
 
 def get_access_token(client_id, client_secret, refresh_token, zoho_org_id):
     logger.info(f'Getting access token: {zoho_org_id}')
+    logger.debug(f'Client ID: {client_id}, Client Secret: {client_secret}, Refresh Token: {refresh_token}')
     token_url = settings.ZOHO_TOKEN_URL
     if not refresh_token:
-        raise Exception(f"Refresh token is missing for Zoho Org ID: {zoho_org_id}")
-        # refresh_token = get_refresh_token()
+        logger.error(f"No refresh token available for Zoho Org ID {zoho_org_id}")
+        raise ValueError(f"No refresh token available for Zoho Org ID {zoho_org_id}")
     payload = {
         "client_id": client_id,
         "client_secret": client_secret,
@@ -179,6 +180,7 @@ def get_access_token(client_id, client_secret, refresh_token, zoho_org_id):
             access_token = response.json()["access_token"]
             return access_token
         else:
+            logger.error(f"Failed to get access token for Zoho Org ID {zoho_org_id}: {response.text}")
             raise Exception(f"Failed to get access token for Zoho Org ID {zoho_org_id}: {response.text}")
     except requests.exceptions.RequestException as e:
         logger.error(f"Error getting access token for Zoho Org ID {zoho_org_id}: {e}")
@@ -298,14 +300,18 @@ def zoho_api_connect(request, zoho_org_id):
 
 
 def config_headers(zoho_org_id):
-    app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
-    access_token = get_access_token(
-        app_config.zoho_client_id,
-        app_config.zoho_client_secret,
-        app_config.zoho_refresh_token,
-        zoho_org_id
-    )
-    headers = {
-        "Authorization": f"Zoho-oauthtoken {access_token}"
-    }
-    return headers
+    try:
+        app_config = AppConfig.objects(zoho_org_id=zoho_org_id).first()
+        access_token = get_access_token(
+            app_config.zoho_client_id,
+            app_config.zoho_client_secret,
+            app_config.zoho_refresh_token,
+            zoho_org_id
+        )
+        headers = {
+            "Authorization": f"Zoho-oauthtoken {access_token}"
+        }
+        return headers
+    except Exception as e:
+        logger.error(f"Error configuring headers for Zoho Org ID {zoho_org_id}: {e}")
+        return None

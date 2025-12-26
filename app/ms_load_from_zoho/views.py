@@ -229,7 +229,7 @@ def load_books_invoices(request, zoho_org_id):
 # MÉTRICAS PANEL (JSON/HTML)
 # =========================
 
-MODULES = ['items', 'itemgroups', 'salesorders', 'shipments', 'invoices', 'customers']
+MODULES = ['items', 'itemgroups', 'salesorders', 'shipments', 'invoices', 'customers', 'purchaseorders']
 
 @api_view(['GET'])
 @permission_classes([AllowAny])

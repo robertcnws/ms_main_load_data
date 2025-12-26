@@ -8,6 +8,7 @@ from ms_load_from_zoho.tasks import (
     task_load_inventory_shipments,
     task_load_books_customers,
     task_load_books_invoices,
+    task_load_inventory_purchaseorders,
 )
 from ms_load_from_senitron.tasks import (
     task_load_senitron_items_assets,
@@ -26,6 +27,11 @@ def tiny_sleep_zoho_shipments(seconds=5, after=None):
 def tiny_sleep_zoho_sales(seconds=5, after=None):
     time.sleep(seconds)
     return f"slept in ZOHO SALES worker (SALES ORDERS, INVOICES) after {after}"
+
+@shared_task(queue="zoho_purchases")
+def tiny_sleep_zoho_purchases(seconds=5, after=None):
+    time.sleep(seconds)
+    return f"slept in ZOHO PURCHASES worker (PURCHASE ORDERS) after {after}"
 
 @shared_task(queue="zoho_catalog")
 def tiny_sleep_zoho_catalog(seconds=5, after=None):
@@ -56,6 +62,15 @@ def task_sequence_by_zoho_sales():
     pause2 = tiny_sleep_zoho_sales.si(2, after='invoices load').set(queue="zoho_sales")
     ar = (s1 | pause1 | s2 | pause2).apply_async()
     logger.info("Chain zoho sales/invoices started: id=%s root_id=%s", ar.id, getattr(ar, "parent", None))
+    
+
+@shared_task(queue="zoho_purchases")
+def task_sequence_by_zoho_purchases():
+    logger.info("Starting ZOHO purchases chain: purchase_orders ")
+    s1 = task_load_inventory_purchaseorders.si().set(queue="zoho_purchases")
+    pause1 = tiny_sleep_zoho_purchases.si(2, after='purchase orders load').set(queue="zoho_purchases")
+    ar = (s1 | pause1).apply_async()
+    logger.info("Chain zoho purchase orders started: id=%s root_id=%s", ar.id, getattr(ar, "parent", None))
 
 
 @shared_task(queue="zoho_catalog")

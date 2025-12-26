@@ -581,3 +581,95 @@ class ZohoItemGroup(Document):
         "strict": False,
         "auto_create_index": True,
     }
+
+class ZohoPurchaseOrder(Document):
+    # ========= IDs =========
+    purchaseorder_id = StringField(required=True, unique=True)
+    purchaseorder_number = StringField()
+    reference_number = StringField()
+    status = StringField()
+
+    # ========= Vendor =========
+    vendor_id = StringField()
+    vendor_name = StringField()
+
+    # ========= Dates =========
+    date = DateField()
+    expected_delivery_date = DateField()
+    delivery_date = DateField()
+    created_time = DateTimeField()
+    last_modified_time = DateTimeField()
+
+    # ========= Currency =========
+    currency_id = StringField()
+    currency_code = StringField()
+    currency_symbol = StringField()
+    exchange_rate = FloatField()
+
+    # ========= Flags =========
+    is_drop_shipment = BooleanField()
+    is_backorder = BooleanField()
+    can_send_in_mail = BooleanField()
+    is_pre_gst = BooleanField()
+    is_reverse_charge_applied = BooleanField()
+
+    # ========= Totals =========
+    sub_total = FloatField()
+    tax_total = FloatField()
+    total = FloatField()
+    price_precision = IntField()
+
+    # ========= Relations =========
+    salesorder_id = StringField()
+    pricebook_id = StringField()
+    ship_via = StringField()
+    ship_via_id = StringField()
+
+    # ========= GST =========
+    gst_treatment = StringField()
+    gst_no = StringField()
+    source_of_supply = StringField()
+    destination_of_supply = StringField()
+
+    # ========= Misc =========
+    notes = StringField()
+    terms = StringField()
+    attention = StringField()
+    attachment_name = StringField()
+    template_id = StringField()
+    template_name = StringField()
+    template_type = StringField()
+
+    # ========= Location =========
+    location_id = StringField()
+    location_name = StringField()
+
+    # ========= Dynamic LISTS (SIN EmbeddedDocument) =========
+    contact_persons_associated = ListField(DynamicField())
+    custom_fields = ListField(DynamicField())
+    line_items = ListField(DynamicField())
+    taxes = ListField(DynamicField())
+    billing_address = ListField(DynamicField())
+    delivery_address = ListField(DynamicField())
+    purchasereceives = ListField(DynamicField())
+    bills = ListField(DynamicField())
+
+    # ========= Catch-all =========
+    raw_payload = DictField()
+    
+    zoho_org_id = StringField()
+    
+    meta = {
+        "collection": "zoho_purchase_orders",
+        "strict": False,
+        "indexes": [
+            "purchaseorder_id",
+            "purchaseorder_number",
+            "vendor_id",
+            "status",
+            "-created_time",
+            "-date",
+            "-last_modified_time",
+            "zoho_org_id",
+        ],
+    }

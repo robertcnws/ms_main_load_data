@@ -9,6 +9,7 @@ set -Eeuo pipefail
 : "${ZOHO_CATALOG_CONCURRENCY:=2}"
 : "${ZOHO_SALES_CONCURRENCY:=1}"       # bajar a 1 para evitar hog/solapes
 : "${ZOHO_SHIPMENTS_CONCURRENCY:=1}"   # 1 para anti-429
+: "${ZOHO_PURCHASES_CONCURRENCY:=1}"   # 1 para anti-429
 : "${SENITRON_CONCURRENCY:=2}"
 : "${CELERY_LOGLEVEL:=info}"
 : "${CELERY_EVENTS:=1}" # 1=habilita -E, 0=no
@@ -20,6 +21,8 @@ set -Eeuo pipefail
 : "${ZOHO_SHIP_HARD_TL:=600}"          # 10 min
 : "${ZOHO_CATALOG_SOFT_TL:=420}"       # 7 min
 : "${ZOHO_CATALOG_HARD_TL:=480}"       # 8 min
+: "${ZOHO_PURCHASES_SOFT_TL:=600}"
+: "${ZOHO_PURCHASES_HARD_TL:=720}"
 : "${SENITRON_SOFT_TL:=600}"
 : "${SENITRON_HARD_TL:=720}"
 
@@ -44,7 +47,7 @@ set -Eeuo pipefail
 
 # Purga/Limpieza inicial (mejor OFF en prod)
 : "${PURGE_ON_BOOT:=0}"                               # <--- CAMBIO: evita perder colas en reinicios
-: "${QUEUES_TO_PURGE:=celery,default,zoho_catalog,zoho_sales,zoho_shipments,senitron}"
+: "${QUEUES_TO_PURGE:=celery,default,zoho_catalog,zoho_sales,zoho_shipments,zoho_purchases,senitron}"
 : "${PURGE_TIMEOUT:=6}"
 
 # Beat schedule (archivo local)
@@ -147,6 +150,7 @@ COMMON_FLAGS="-O ${CELERY_OPTIMIZATION} --pool=prefork --prefetch-multiplier=${C
 start_bg "celery -A ms_main_load_data worker -Q zoho_catalog   -c ${ZOHO_CATALOG_CONCURRENCY}   -n zoho_catalog@%h   --loglevel=${CELERY_LOGLEVEL} ${events_flag} ${COMMON_FLAGS} --soft-time-limit=${ZOHO_CATALOG_SOFT_TL} --time-limit=${ZOHO_CATALOG_HARD_TL}"
 start_bg "celery -A ms_main_load_data worker -Q zoho_sales     -c ${ZOHO_SALES_CONCURRENCY}     -n zoho_sales@%h     --loglevel=${CELERY_LOGLEVEL} ${events_flag} ${COMMON_FLAGS} --soft-time-limit=${ZOHO_SALES_SOFT_TL}   --time-limit=${ZOHO_SALES_HARD_TL}"
 start_bg "celery -A ms_main_load_data worker -Q zoho_shipments -c ${ZOHO_SHIPMENTS_CONCURRENCY} -n zoho_shipments@%h --loglevel=${CELERY_LOGLEVEL} ${events_flag} ${COMMON_FLAGS} --soft-time-limit=${ZOHO_SHIP_SOFT_TL}     --time-limit=${ZOHO_SHIP_HARD_TL}"
+start_bg "celery -A ms_main_load_data worker -Q zoho_purchases -c ${ZOHO_PURCHASES_CONCURRENCY} -n zoho_purchases@%h --loglevel=${CELERY_LOGLEVEL} ${events_flag} ${COMMON_FLAGS} --soft-time-limit=${ZOHO_PURCHASES_SOFT_TL} --time-limit=${ZOHO_PURCHASES_HARD_TL}"
 start_bg "celery -A ms_main_load_data worker -Q senitron       -c ${SENITRON_CONCURRENCY}       -n senitron@%h       --loglevel=${CELERY_LOGLEVEL} ${events_flag} ${COMMON_FLAGS} --soft-time-limit=${SENITRON_SOFT_TL}       --time-limit=${SENITRON_HARD_TL}"
 
 start_bg "celery -A ms_main_load_data beat --loglevel=${CELERY_LOGLEVEL}"
@@ -172,14 +176,14 @@ if [ "${INSPECTOR_INTERVAL}" != "0" ]; then
     echo '[inspector] celery status:'; \
     celery -A ms_main_load_data status || true; \
     echo '[inspector] active_queues (filtered if nodes exist, otherwise without filter):'; \
-    if celery -A ms_main_load_data status 2>/dev/null | grep -E 'zoho_shipments@|zoho_catalog@|zoho_sales@|senitron@' >/dev/null; then \
-      celery -A ms_main_load_data inspect active_queues -d 'zoho_shipments@*' -d 'zoho_catalog@*' -d 'zoho_sales@*' -d 'senitron@*' || true; \
+    if celery -A ms_main_load_data status 2>/dev/null | grep -E 'zoho_shipments@|zoho_catalog@|zoho_sales@|zoho_purchases@|senitron@' >/dev/null; then \
+      celery -A ms_main_load_data inspect active_queues -d 'zoho_shipments@*' -d 'zoho_catalog@*' -d 'zoho_sales@*' -d 'zoho_purchases@*' -d 'senitron@*' || true; \
     else \
       celery -A ms_main_load_data inspect active_queues || true; \
     fi; \
     echo '[inspector] registered tasks (primeras 120 líneas):'; \
-    if celery -A ms_main_load_data status 2>/dev/null | grep -E 'zoho_shipments@|zoho_catalog@|zoho_sales@|senitron@' >/dev/null; then \
-      celery -A ms_main_load_data inspect registered -d 'zoho_shipments@*' -d 'zoho_catalog@*' -d 'zoho_sales@*' -d 'senitron@*' | head -n 120 || true; \
+    if celery -A ms_main_load_data status 2>/dev/null | grep -E 'zoho_shipments@|zoho_catalog@|zoho_sales@|zoho_purchases@|senitron@' >/dev/null; then \
+      celery -A ms_main_load_data inspect registered -d 'zoho_shipments@*' -d 'zoho_catalog@*' -d 'zoho_sales@*' -d 'zoho_purchases@*' -d 'senitron@*' | head -n 120 || true; \
     else \
       celery -A ms_main_load_data inspect registered | head -n 120 || true; \
     fi; \

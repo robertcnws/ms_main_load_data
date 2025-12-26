@@ -5,6 +5,7 @@ from ms_load_from_zoho.service_invoices import load_invoices_service
 from ms_load_from_zoho.service_items import load_items_service
 from ms_load_from_zoho.service_sales_orders import load_sales_orders_service
 from ms_load_from_zoho.service_itemgroups import load_itemgroups_service
+from ms_load_from_zoho.service_purchaseorders import load_purchaseorders_service
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from datetime import datetime, timedelta
@@ -116,7 +117,7 @@ def task_load_inventory_sales_orders():
         im_sales_orders = IntegrationMetrics.objects(module='salesorders')
 
         now_date = datetime.now()
-        days_before_now = now_date - timedelta(days=settings.TIMEDELTA_ZOHO_SALES_ORDERS)
+        
         # # Si hay last_sync, retrocede TIMEDELTA desde esa fecha; si no, desde hoy
         # days_before = (
         #     (last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_SALES_ORDERS)).strftime("%Y-%m-%d")
@@ -128,8 +129,10 @@ def task_load_inventory_sales_orders():
         for org in apps:
             try:
                 last_sync_date = im_sales_orders.get(zoho_org_id=org.zoho_org_id).last_run_dt
+                timedelta_diff = settings.TIMEDELTA_ZOHO_SALES_ORDERS if org.zoho_org_id == settings.ZOHO_ORG_ID else settings.TIMEDELTA_ZOHO_SALES_ORDERS_NWSHOMES
+                days_before_now = now_date - timedelta(days=timedelta_diff)
                 days_before = (
-                    last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_SALES_ORDERS)
+                    last_sync_date - timedelta(days=timedelta_diff)
                     if last_sync_date else days_before_now
                 )
                 days_before = to_tz_iso8601(days_before)
@@ -227,3 +230,63 @@ def task_load_books_invoices():
 
     return "Task Books Invoices Completed"
 
+
+@shared_task(
+    queue="zoho_purchases",
+    autoretry_for=(SoftTimeLimitExceeded,),
+    retry_backoff=True,      # backoff exponencial
+    retry_jitter=True,
+    retry_kwargs={"max_retries": 3},
+    time_limit=_SO_HARD_TL,
+    soft_time_limit=_SO_SOFT_TL,
+)
+def task_load_inventory_purchaseorders():
+    logger.info("ZOHO: purchase orders TASK START")
+
+    try:
+        apps = AppConfig.objects.all()
+
+        now_date = datetime.now()
+        days_before_now = now_date - timedelta(days=settings.TIMEDELTA_ZOHO_PURCHASE_ORDERS)
+
+        bad_orgs = []
+
+        for org in apps:
+            try:
+                saved_last_sync = IntegrationMetrics.objects(
+                    module="purchaseorders",
+                    zoho_org_id=org.zoho_org_id
+                ).first()
+                last_sync_date = saved_last_sync.last_run_dt if saved_last_sync else None
+                days_before = (
+                    last_sync_date - timedelta(days=settings.TIMEDELTA_ZOHO_PURCHASE_ORDERS)
+                    if last_sync_date else days_before_now
+                )
+                days_before = to_tz_iso8601(days_before)
+                logger.info("Purchase Orders org=%s -> datetime=%s", org.zoho_org_id, days_before)
+                res = load_purchaseorders_service(start_date=days_before, zoho_org_id=org.zoho_org_id)
+                status = res.get("status", "ok")
+                logger.info(
+                    "Purchase Orders org=%s -> status=%s created=%s updated=%s list_calls=%s detail_calls=%s duration=%.2fs",
+                    org.zoho_org_id, status, res.get("created"), res.get("updated"),
+                    res.get("list_calls"), res.get("detail_calls"), res.get("duration_sec", 0.0),
+                )
+                if status in ("error", "partial"):
+                    bad_orgs.append((org.zoho_org_id, status))
+            except SoftTimeLimitExceeded:
+                logger.warning("ZOHO: purchase orders soft timeout en org=%s -> autoretry", org.zoho_org_id)
+                raise
+            except Exception as e:
+                logger.exception("Purchase Orders task failed for org=%s: %s", org.zoho_org_id, e)
+                bad_orgs.append((org.zoho_org_id, "error"))
+
+        if bad_orgs:
+            logger.warning("Purchase Orders finalizó con incidencias en orgs: %s", bad_orgs)
+        return "Task Inventory Purchase Orders Completed"
+
+    except SoftTimeLimitExceeded:
+        logger.warning("ZOHO: purchase orders soft timeout (global) -> autoretry")
+        raise
+    except Exception as e:
+        logger.exception("ZOHO: purchase orders task error (global): %s", e)
+        return "Task Inventory Purchase Orders Completed (with errors)"
