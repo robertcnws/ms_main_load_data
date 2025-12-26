@@ -578,31 +578,31 @@ CRONTAB_SENITRON_SUNDAY = crontab(
 # SCHEDULES
 CELERY_BEAT_SCHEDULE = {
     # MONDAY_TO_SATURDAY
-    # 'run-task-sequence-zoho-customers-items-monday-saturday': {
-    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_customers_items',
-    #     'schedule': CRONTAB_ZOHO_CATALOG_MONDAY_TO_SATURDAY,
-    #     'options': {'queue': 'zoho_catalog'},        # <-- importante
-    # },
-    # 'run-task-sequence-zoho-itemgroups-monday-saturday': {
-    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_itemgroups',
-    #     'schedule': CRONTAB_ZOHO_ITEMGROUPS_MONDAY_TO_SATURDAY,
-    #     'options': {'queue': 'zoho_catalog'},        # <-- importante
-    # },
-    # 'run-task-sequence-zoho-sales-monday-saturday': {
-    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales',
-    #     'schedule': CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY,
-    #     'options': {'queue': 'zoho_sales'},        # <-- importante
-    # },
-    # 'run-task-sequence-zoho-shipments-monday-saturday': {
-    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_shipments',
-    #     'schedule': CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY,
-    #     'options': {'queue': 'zoho_shipments'},        # <-- importante
-    # },
-    # 'run-task-sequence-senitron-monday-saturday': {
-    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
-    #     'schedule': CRONTAB_SENITRON_MONDAY_TO_SATURDAY,
-    #     'options': {'queue': 'senitron'},    # <-- importante
-    # },
+    'run-task-sequence-zoho-customers-items-monday-saturday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_customers_items',
+        'schedule': CRONTAB_ZOHO_CATALOG_MONDAY_TO_SATURDAY,
+        'options': {'queue': 'zoho_catalog'},        # <-- importante
+    },
+    'run-task-sequence-zoho-itemgroups-monday-saturday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_itemgroups',
+        'schedule': CRONTAB_ZOHO_ITEMGROUPS_MONDAY_TO_SATURDAY,
+        'options': {'queue': 'zoho_catalog'},        # <-- importante
+    },
+    'run-task-sequence-zoho-sales-monday-saturday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales',
+        'schedule': CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY,
+        'options': {'queue': 'zoho_sales'},        # <-- importante
+    },
+    'run-task-sequence-zoho-shipments-monday-saturday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_shipments',
+        'schedule': CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY,
+        'options': {'queue': 'zoho_shipments'},        # <-- importante
+    },
+    'run-task-sequence-senitron-monday-saturday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
+        'schedule': CRONTAB_SENITRON_MONDAY_TO_SATURDAY,
+        'options': {'queue': 'senitron'},    # <-- importante
+    },
     'run-task-sequence-zoho-purchases-monday-saturday': {
         'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_purchases',
         'schedule': CRONTAB_ZOHO_PURCHASES_MONDAY_TO_SATURDAY,
@@ -610,31 +610,31 @@ CELERY_BEAT_SCHEDULE = {
     },
 
     # SUNDAY
-    # 'run-task-sequence-zoho-customers-items-sunday': {
-    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_customers_items',
-    #     'schedule': CRONTAB_ZOHO_CATALOG_SUNDAY,
-    #     'options': {'queue': 'zoho_catalog'},
-    # },
-    # 'run-task-sequence-zoho-itemgroups-sunday': {
-    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_itemgroups',
-    #     'schedule': CRONTAB_ZOHO_ITEMGROUPS_SUNDAY,
-    #     'options': {'queue': 'zoho_catalog'},        # <-- importante
-    # },
-    # 'run-task-sequence-zoho-sales-sunday': {
-    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales',
-    #     'schedule': CRONTAB_ZOHO_SALES_SUNDAY,
-    #     'options': {'queue': 'zoho_sales'},        # <-- importante
-    # },
-    # 'run-task-sequence-zoho-shipments-sunday': {
-    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_shipments',
-    #     'schedule': CRONTAB_ZOHO_SHIPMENTS_SUNDAY,
-    #     'options': {'queue': 'zoho_shipments'},        # <-- importante
-    # },
-    # 'run-task-sequence-senitron-sunday': {
-    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
-    #     'schedule': CRONTAB_SENITRON_SUNDAY,
-    #     'options': {'queue': 'senitron'},
-    # },
+    'run-task-sequence-zoho-customers-items-sunday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_customers_items',
+        'schedule': CRONTAB_ZOHO_CATALOG_SUNDAY,
+        'options': {'queue': 'zoho_catalog'},
+    },
+    'run-task-sequence-zoho-itemgroups-sunday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_itemgroups',
+        'schedule': CRONTAB_ZOHO_ITEMGROUPS_SUNDAY,
+        'options': {'queue': 'zoho_catalog'},        # <-- importante
+    },
+    'run-task-sequence-zoho-sales-sunday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales',
+        'schedule': CRONTAB_ZOHO_SALES_SUNDAY,
+        'options': {'queue': 'zoho_sales'},        # <-- importante
+    },
+    'run-task-sequence-zoho-shipments-sunday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_shipments',
+        'schedule': CRONTAB_ZOHO_SHIPMENTS_SUNDAY,
+        'options': {'queue': 'zoho_shipments'},        # <-- importante
+    },
+    'run-task-sequence-senitron-sunday': {
+        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
+        'schedule': CRONTAB_SENITRON_SUNDAY,
+        'options': {'queue': 'senitron'},
+    },
     'run-task-sequence-zoho-purchases-sunday': {
         'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_purchases',
         'schedule': CRONTAB_ZOHO_PURCHASES_SUNDAY,
