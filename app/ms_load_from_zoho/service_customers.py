@@ -87,7 +87,7 @@ def load_customers_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
     cutoff_dt = _parse_zoho_ts(last_modified_time)
 
     logger.info(
-        "CUSTOMERS: org=%s start=%s last_modified_time=%s (cutoff=%s)",
+        "CUSTOMERS: org_id=%s start=%s last_modified_time=%s (cutoff=%s)",
         zoho_org_id, start_date, last_modified_time, cutoff_dt.isoformat() if cutoff_dt else None,
     )
 
@@ -95,7 +95,7 @@ def load_customers_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
     try:
         headers = helpers.config_headers(zoho_org_id)
     except Exception as e:
-        logger.error(f"Error connecting to Zoho API (headers): {e}")
+        logger.error("Error connecting to Zoho API (headers) for org_id=%s: %s", zoho_org_id, e)
         status = "error"
         set_metrics(
             "customers",
@@ -157,7 +157,7 @@ def load_customers_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
                         wait_s = float(ra) if ra is not None else 2.0
                     except Exception:
                         wait_s = 2.0
-                    logger.warning(f"429 on customers list page={page} -> sleeping {wait_s}s")
+                    logger.warning(f"429 on customers list page={page} for org_id={zoho_org_id} -> sleeping {wait_s}s")
                     time.sleep(wait_s)
                     continue
 
@@ -173,8 +173,8 @@ def load_customers_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
                     last_lm = min(ts_vals) if ts_vals else None   # el más viejo del batch
 
                     logger.info(
-                        "Customers page=%s got=%s lm_first=%s lm_last=%s cutoff=%s",
-                        page, len(batch),
+                        "Customers org_id=%s page=%s got=%s lm_first=%s lm_last=%s cutoff=%s",
+                        zoho_org_id, page, len(batch),
                         first_lm.isoformat() if first_lm else None,
                         last_lm.isoformat() if last_lm else None,
                         cutoff_dt.isoformat() if cutoff_dt else None
@@ -184,30 +184,30 @@ def load_customers_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
                     if not order_detected and first_lm and last_lm:
                         detected_desc = first_lm > last_lm
                         order_detected = True
-                        logger.info("Customers order detected: %s", "DESC" if detected_desc else "ASC/unknown")
+                        logger.info("Customers order detected for org_id=%s: %s", zoho_org_id, "DESC" if detected_desc else "ASC/unknown" )
 
                     # Early-stop SOLO si realmente está en DESC (o si el caller lo pidió y coincide)
                     if (detected_desc or sort_order == "D") and last_lm and cutoff_dt and last_lm < cutoff_dt:
-                        logger.info("Stopping paging (customers): last_lm < cutoff (page=%s, DESC)", page)
+                        logger.info("Stopping paging (customers) for org_id=%s: last_lm < cutoff (page=%s, DESC)", zoho_org_id, page)
                         break
 
                 page_ctx = payload.get("page_context", {}) or {}
                 has_more = bool(page_ctx.get("has_more_page"))
-                logger.info("Customers list page=%s got=%s has_more=%s", page, len(batch), has_more)
+                logger.info("Customers list for org_id=%s page=%s got=%s has_more=%s", zoho_org_id, page, len(batch), has_more)
 
                 if not has_more:
                     break
 
                 page += 1
                 if page > MAX_PAGES:
-                    logger.warning("Reached MAX_PAGES=%s on customers -> break", MAX_PAGES)
+                    logger.warning("Reached MAX_PAGES=%s on customers for org_id=%s -> break", MAX_PAGES, zoho_org_id)
                     hit_max_pages = True
                     break
 
                 time.sleep(PAGE_DELAY)
 
             except requests.exceptions.RequestException as e:
-                logger.error(f"Error fetching customers list (page={page}): {e}")
+                logger.error("Error fetching customers list for org_id=%s (page=%s) : %s", zoho_org_id, page, e)
                 status = "error"
                 set_metrics(
                     "customers",
@@ -274,13 +274,13 @@ def load_customers_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
                 setattr(dst, f, getattr(c, f))
             dst.save()
             # Update Related Invoices
-            update_related_invoices(dst)
+            update_related_invoices(dst, zoho_org_id)
             # Update Related Sales Orders
-            update_related_sales_orders(dst)
+            update_related_sales_orders(dst, zoho_org_id)
             # Update Related Shipments
-            update_related_shipments(dst)
+            update_related_shipments(dst, zoho_org_id)
             # Update Related Packages
-            update_related_packages(dst)
+            update_related_packages(dst, zoho_org_id)
         updated = len(upd_customers)
 
     # Actualizar last_sync_date SOLO si no fue parcial por MAX_PAGES
@@ -308,8 +308,8 @@ def load_customers_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
     )
 
     logger.info(
-        "Customers processed: %s created, %s updated (status=%s, hit_max_pages=%s)",
-        created, updated, final_status, hit_max_pages
+        "Customers processed for org_id=%s: %s created, %s updated (status=%s, hit_max_pages=%s)",
+        zoho_org_id, created, updated, final_status, hit_max_pages
     )
     return {
         "status": final_status,
@@ -327,8 +327,8 @@ def load_customers_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
         "order_detected": "DESC" if detected_desc else "ASC/unknown",
     }
 
-def update_related_invoices(dst: ZohoCustomer):
-    logger.info("Updating related invoices for customer: %s", dst.contact_id)
+def update_related_invoices(dst: ZohoCustomer, zoho_org_id: str):
+    logger.info("Updating related invoices for customer: %s for org_id=%s", dst.contact_id, zoho_org_id)
     invoices = ZohoFullInvoice.objects(customer_id=dst.contact_id)
     for inv in invoices:
         inv.customer_name = dst.customer_name if dst.customer_name else inv.customer_name
@@ -346,26 +346,26 @@ def update_related_invoices(dst: ZohoCustomer):
             })
             inv.contact_persons_details = new_contacts
         inv.save()
-    logger.info("%s Invoices updated for customer: %s", len(invoices), dst.contact_id)
+    logger.info("%s Invoices updated for customer: %s for org_id=%s", len(invoices), dst.contact_id, zoho_org_id)
 
-def update_related_sales_orders(dst: ZohoCustomer):
-    logger.info("Updating related sales orders for customer: %s", dst.contact_id)
+def update_related_sales_orders(dst: ZohoCustomer, zoho_org_id: str):
+    logger.info("Updating related sales orders for customer: %s for org_id=%s", dst.contact_id, zoho_org_id)
     sales_orders = ZohoInventoryShipmentSalesOrder.objects(customer_id=dst.contact_id)
     for so in sales_orders:
         so.customer_name = dst.customer_name if dst.customer_name else so.customer_name
         so.save()
-    logger.info("%s Sales orders updated for customer: %s", len(sales_orders), dst.contact_id)
+    logger.info("%s Sales orders updated for customer: %s for org_id=%s", len(sales_orders), dst.contact_id, zoho_org_id)
     
-def update_related_shipments(dst: ZohoCustomer):
-    logger.info("Updating related shipments for customer: %s", dst.contact_id)
+def update_related_shipments(dst: ZohoCustomer, zoho_org_id: str):
+    logger.info("Updating related shipments for customer: %s for org_id=%s", dst.contact_id, zoho_org_id)
     shipments = ZohoShipmentOrder.objects(customer_id=dst.contact_id)
     for shipment in shipments:
         shipment.customer_name = dst.customer_name if dst.customer_name else shipment.customer_name
         shipment.save()
-    logger.info("%s Shipments updated for customer: %s", len(shipments), dst.contact_id)
+    logger.info("%s Shipments updated for customer: %s for org_id=%s", len(shipments), dst.contact_id, zoho_org_id)
 
-def update_related_packages(dst: ZohoCustomer):
-    logger.info("Updating related packages for customer: %s", dst.contact_id)
+def update_related_packages(dst: ZohoCustomer, zoho_org_id: str):
+    logger.info("Updating related packages for customer: %s for org_id=%s", dst.contact_id, zoho_org_id)
     packages = ZohoPackage.objects(customer_id=dst.contact_id)
     for package in packages:
         package.customer_name = dst.customer_name if dst.customer_name else package.customer_name
@@ -373,4 +373,4 @@ def update_related_packages(dst: ZohoCustomer):
         package.phone = dst.phone if dst.phone else package.phone
         package.mobile = dst.mobile if dst.mobile else package.mobile
         package.save()
-    logger.info("%s Packages updated for customer: %s", len(packages), dst.contact_id)
+    logger.info("%s Packages updated for customer: %s for org_id=%s", len(packages), dst.contact_id, zoho_org_id)

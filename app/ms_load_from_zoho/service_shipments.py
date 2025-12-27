@@ -121,7 +121,7 @@ def _zoho_get_light(session: requests.Session, url: str, headers: Dict[str, str]
                     params: Dict[str, Any], zoho_org_id: str) -> requests.Response:
     resp = session.get(url, headers=headers, params=params, timeout=(CONNECT_TO, READ_TO))
     if resp.status_code == 401:
-        logger.warning("401 -> refreshing token")
+        logger.warning("401 -> refreshing token for org_id=%s", zoho_org_id)
         new_token = helpers.refresh_zoho_access_token(zoho_org_id)
         headers["Authorization"] = f"Zoho-oauthtoken {new_token}"
         resp = session.get(url, headers=headers, params=params, timeout=(CONNECT_TO, READ_TO))
@@ -152,7 +152,7 @@ def fetch_shipment_details(list_item: Dict[str, Any], headers: Dict[str, str], z
         resp = _zoho_get_light(s, url, headers, {}, zoho_org_id)
     if resp.status_code == 429:
         ra = _extract_retry_after(resp)
-        logger.warning("429 %s (Retry-After=%ss) -> SKIP shipment detail", url, ra)
+        logger.warning("429 %s (Retry-After=%ss) -> SKIP shipment detail in org_id=%s", url, ra, zoho_org_id)
         return None
     resp.raise_for_status()
     if ZOHO_DETAIL_THROTTLE_SEC > 0:
@@ -173,7 +173,7 @@ def fetch_package(package_id: str, headers: Dict[str, str], zoho_org_id: str) ->
         resp = _zoho_get_light(s, url, headers, {}, zoho_org_id)
     if resp.status_code == 429:
         ra = _extract_retry_after(resp)
-        logger.warning("429 %s (Retry-After=%ss) -> SKIP package detail", url, ra)
+        logger.warning("429 %s (Retry-After=%ss) -> SKIP package detail in org_id=%s", url, ra, zoho_org_id)
         return None
     resp.raise_for_status()
     if ZOHO_DETAIL_THROTTLE_SEC > 0:
@@ -209,7 +209,7 @@ def load_shipments_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
     cutoff_dt = _parse_zoho_ts(last_modified_time)
 
     logger.info(
-        "ZOHO: shipments org=%s start=%s last_modified_time=%s (cutoff=%s)",
+        "ZOHO: shipments org_id=%s start=%s last_modified_time=%s (cutoff=%s)",
         zoho_org_id, start_date, last_modified_time, cutoff_dt.isoformat() if cutoff_dt else None,
     )
 
@@ -217,7 +217,7 @@ def load_shipments_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
     try:
         headers = helpers.config_headers(zoho_org_id)
     except Exception as e:
-        logger.error(f"Error connecting to Zoho API (headers): {e}")
+        logger.error(f"Error connecting to Zoho API (headers) for org_id={zoho_org_id}: {e}")
         status = "error"
         _set_metrics(
             "shipments", 
@@ -264,20 +264,22 @@ def load_shipments_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
                     first_lm = max(ts_vals) if ts_vals else None
                     last_lm  = min(ts_vals) if ts_vals else None
                     logger.info(
-                        "Shipments page=%s got=%s lm_first=%s lm_last=%s cutoff=%s",
-                        page, len(batch),
+                        "Shipments org_id=%s page=%s got=%s lm_first=%s lm_last=%s cutoff=%s",
+                        zoho_org_id, 
+                        page, 
+                        len(batch),
                         first_lm.isoformat() if first_lm else None,
                         last_lm.isoformat()  if last_lm  else None,
                         cutoff_dt.isoformat() if cutoff_dt else None
                     )
                     # EARLY STOP por cutoff (un día)
                     if last_lm and cutoff_dt and last_lm < cutoff_dt:
-                        logger.info("Stopping paging: last_lm < cutoff (page=%s)", page)
+                        logger.info("Stopping shipments paging: last_lm < cutoff (page=%s) in org_id=%s", page, zoho_org_id)
                         break
 
                 page_ctx = payload.get("page_context", {}) or {}
                 has_more = bool(page_ctx.get("has_more_page"))
-                logger.info("Shipments list page=%s got=%s has_more=%s", page, len(batch), has_more)
+                logger.info("Shipments list org_id=%s page=%s got=%s has_more=%s", zoho_org_id, page, len(batch), has_more)
 
                 if not has_more or page >= ZOHO_MAX_PAGES:
                     hit_max_pages = page >= ZOHO_MAX_PAGES and has_more
@@ -287,7 +289,7 @@ def load_shipments_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
                 time.sleep(ZOHO_LIST_PAGE_DELAY_SEC)
 
             except requests.exceptions.RequestException as e:
-                logger.error(f"Error fetching shipments list (page={page}): {e}")
+                logger.error(f"Error fetching shipments list (page={page}) in org_id={zoho_org_id} : {e}")
                 status = "error"
                 _set_metrics(
                     "shipments", 
@@ -332,11 +334,14 @@ def load_shipments_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
     detail_candidates = detail_candidates_all[:ZOHO_MAX_DETAILS_PER_RUN_SHIP]
     omitted = max(0, len(detail_candidates_all) - len(detail_candidates))
     logger.info(
-        "ZOHO: shipments DETAILS candidates=%s (from listed=%s) cutoff=%s",
-        len(detail_candidates), len(items_list), cutoff_dt.isoformat() if cutoff_dt else None
+        "ZOHO: shipments DETAILS org_id=%s candidates=%s (from listed=%s) cutoff=%s",
+        zoho_org_id, len(detail_candidates), len(items_list), cutoff_dt.isoformat() if cutoff_dt else None
     )
     if omitted:
-        logger.warning("Detail candidates capped: %s omitted (limit=%s)", omitted, ZOHO_MAX_DETAILS_PER_RUN_SHIP)
+        logger.warning(
+            "Detail shipments candidates capped: %s omitted (limit=%s) in org_id=%s", 
+            omitted, ZOHO_MAX_DETAILS_PER_RUN_SHIP, zoho_org_id
+        )
 
     # -------- Details SHIPMENTS (SECUENCIAL) --------
     full_items: List[Dict[str, Any]] = []
@@ -348,23 +353,29 @@ def load_shipments_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
     processed = 0
     for it in detail_candidates:
         if not _time_left_ok():
-            logger.warning("Budget time exhausted for shipment details -> breaking")
+            logger.warning("Budget time exhausted for shipment details -> breaking in org_id=%s", zoho_org_id)
             break
         try:
             r = fetch_shipment_details(it, headers, zoho_org_id)
         except Exception as e:
-            logger.warning("Shipment detail error sid=%s: %s", it.get("shipment_id"), e)
+            logger.warning("Shipment detail error sid=%s in org_id=%s: %s", it.get("shipment_id"), zoho_org_id, e)
             r = None
         if r:
             full_items.append(r)
         processed += 1
         # log SIEMPRE por ítem (para que veas avance continuo)
-        logger.info("Shipment details progress %s/%s (sid=%s)", processed, len(detail_candidates), it.get("shipment_id"))
+        logger.info(
+            "Shipment details progress %s/%s (sid=%s) in org_id=%s", 
+            processed, len(detail_candidates), it.get("shipment_id"), zoho_org_id
+        )
         if ZOHO_DETAIL_THROTTLE_SEC > 0:
             time.sleep(ZOHO_DETAIL_THROTTLE_SEC)
 
     shipment_detail_calls = processed
-    logger.info("ZOHO: shipments DETAILS fetched=%s (candidates_tried=%s)", len(full_items), shipment_detail_calls)
+    logger.info(
+        "ZOHO: shipments DETAILS fetched=%s (candidates_tried=%s) in org_id=%s", 
+        len(full_items), shipment_detail_calls, zoho_org_id
+    )
 
     # -------- Packages (SECUENCIAL) --------
     all_package_ids: List[str] = []
@@ -375,28 +386,33 @@ def load_shipments_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
                 all_package_ids.append(pid)
     all_package_ids = sorted(set(all_package_ids))
     if len(all_package_ids) > ZOHO_MAX_DETAILS_PER_RUN_PKG:
-        logger.warning("Package detail ids capped: %s -> %s (limit)", len(all_package_ids), ZOHO_MAX_DETAILS_PER_RUN_PKG)
+        logger.warning(
+            "Package detail ids capped: %s -> %s (limit) in org_id=%s", 
+            len(all_package_ids), ZOHO_MAX_DETAILS_PER_RUN_PKG, zoho_org_id
+        )
         all_package_ids = all_package_ids[:ZOHO_MAX_DETAILS_PER_RUN_PKG]
 
-    logger.info("ZOHO: shipments PACKAGES ids=%s (unique) for %s shipments with detail",
-                len(all_package_ids), len(full_items))
+    logger.info(
+        "ZOHO: shipments PACKAGES ids=%s (unique) for %s shipments with detail in org_id=%s",
+        len(all_package_ids), len(full_items), zoho_org_id
+    )
 
     all_packages_data: List[Dict[str, Any]] = []
     done_pkg = 0
     for pid in all_package_ids:
         if not _time_left_ok():
-            logger.warning("Max run seconds reached during package details -> stopping")
+            logger.warning("Max run seconds reached during package details -> stopping in org_id=%s", zoho_org_id)
             break
         try:
             pkg = fetch_package(pid, headers, zoho_org_id)
         except Exception as e:
-            logger.warning("Package detail error pid=%s: %s", pid, e)
+            logger.warning("Package detail error pid=%s in org_id=%s: %s", pid, zoho_org_id, e)
             pkg = None
         if pkg:
             all_packages_data.append(pkg)
         done_pkg += 1
         if done_pkg % 10 == 0:
-            logger.info("Package details progress %s/%s (last=%s)", done_pkg, len(all_package_ids), pid)
+            logger.info("Package details progress %s/%s (last=%s) in org_id=%s", done_pkg, len(all_package_ids), pid, zoho_org_id)
         if ZOHO_DETAIL_THROTTLE_SEC > 0:
             time.sleep(ZOHO_DETAIL_THROTTLE_SEC)
 
@@ -485,11 +501,11 @@ def load_shipments_service(*, start_date: Optional[str], zoho_org_id: str) -> Di
         status=final_status,
     )
 
-    logger.info("Shipments processed: %s created, %s updated (status=%s, hit_max_pages=%s, partial_by_limits=%s)",
-                created, updated, final_status, hit_max_pages, partial_by_limits)
+    logger.info("Shipments in org_id=%s processed: %s created, %s updated (status=%s, hit_max_pages=%s, partial_by_limits=%s)",
+                zoho_org_id, created, updated, final_status, hit_max_pages, partial_by_limits)
     logger.info(
-        "ZOHO: shipments DONE status=%s created=%s updated=%s list_calls=%s detail_calls=%s package_calls=%s duration=%.2fs",
-        final_status, created, updated, list_calls, shipment_detail_calls, package_calls, duration
+        "ZOHO: shipments DONE org_id=%s status=%s created=%s updated=%s list_calls=%s detail_calls=%s package_calls=%s duration=%.2fs",
+        zoho_org_id, final_status, created, updated, list_calls, shipment_detail_calls, package_calls, duration
     )
     return {
         "status": final_status,

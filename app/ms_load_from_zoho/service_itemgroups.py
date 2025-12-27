@@ -139,7 +139,7 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
     while has_more:
         cur = params | {"page": page}
         try:
-            logger.debug(f"{LOG_PREFIX} LIST page={page}")
+            logger.debug(f"{LOG_PREFIX} LIST page={page} org_id={zoho_org_id}")
             r = _get(base_url, list_headers, cur)
             if use_if_modified_since and not first_full_load and r.status_code == 304 and page == 1:
                 has_more = False
@@ -171,12 +171,11 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
             page += 1
             time.sleep(LIST_PAGE_DELAY_SEC)
         except requests.RequestException as e:
-            logger.error(f"{LOG_PREFIX} Error fetching itemgroups page={page}: {e}")
+            logger.error(f"{LOG_PREFIX} Error fetching itemgroups page={page} for org_id={zoho_org_id}: {e}")
             status = "error"
             break
 
-    logger.info(f"{LOG_PREFIX} LIST after_cutoff count={len(itemgroups_to_process)} list_calls={list_calls}")
-
+    logger.info(f"{LOG_PREFIX} LIST after_cutoff count={len(itemgroups_to_process)} list_calls={list_calls} org_id={zoho_org_id}")
     ids = [it.get("group_id") for it in itemgroups_to_process if it.get("group_id")]
     existing = ZohoItemGroup.objects(Q(group_id__in=ids))
     existing_map = {doc.group_id: doc for doc in existing}
@@ -246,7 +245,7 @@ def load_itemgroups_service(*, zoho_org_id: str, start_date: str | None = None, 
         status=status,
     )
 
-    logger.info(f"{LOG_PREFIX} END created={created} updated={updated} list_calls={list_calls} duration_sec={duration} status={status}")
+    logger.info(f"{LOG_PREFIX} END org_id={zoho_org_id} created={created} updated={updated} list_calls={list_calls} duration_sec={duration} status={status}")
 
     return {
         "created": created,

@@ -98,7 +98,7 @@ def fetch_purchaseorder_details(po_id: str, base_headers: Dict[str, str], zoho_o
 
             if resp.status_code == 429:
                 # throttling mínimo y “fail-soft”: mejor saltar que bloquear
-                logger.warning("429 detail purchaseorder_id=%s -> skip", po_id)
+                logger.warning("429 detail purchaseorder_id=%s -> skip in org_id=%s", po_id, zoho_org_id)
                 return None
 
             resp.raise_for_status()
@@ -107,7 +107,7 @@ def fetch_purchaseorder_details(po_id: str, base_headers: Dict[str, str], zoho_o
             return (resp.json() or {}).get("purchaseorder")
 
         except requests.exceptions.RequestException as e:
-            logger.warning("Detail error purchaseorder_id=%s: %s", po_id, e)
+            logger.warning("Detail error purchaseorder_id=%s in org_id=%s: %s", po_id, zoho_org_id, e)
             return None
 
 # ====== Servicio principal ======
@@ -185,7 +185,7 @@ def load_purchaseorders_service(start_date: Optional[str], zoho_org_id: str) -> 
     with helpers._retry_session() as session:
         while True:
             if not _time_left_ok(t0):
-                logger.warning("Budget time exhausted on listing -> breaking")
+                logger.warning("Purchase Orders budget time exhausted on listing for org_id=%s -> breaking", zoho_org_id)
                 break
             try:
                 params["page"] = page
@@ -196,11 +196,11 @@ def load_purchaseorders_service(start_date: Optional[str], zoho_org_id: str) -> 
                     new_token = helpers.refresh_zoho_access_token(zoho_org_id)
                     tmp_headers = dict(base_headers, Authorization=f"Zoho-oauthtoken {new_token}")
                     resp = session.get(url, headers=tmp_headers, params=params, timeout=LIST_TIMEOUT_SEC)
-                    logger.info("Refreshed token ok=%s", bool(new_token))
-                    logger.error("Zoho 401 body=%s", resp.text[:500])
+                    logger.info("PurchaseOrders refreshed token ok=%s for org_id=%s", bool(new_token), zoho_org_id)
+                    logger.error("Purchase Orders Zoho 401 body=%s for org_id=%s", resp.text[:500], zoho_org_id)
                     list_calls += 1
                 if resp.status_code == 429:
-                    logger.warning("429 list page=%s -> tiny backoff", page)
+                    logger.warning("429 list purchaseorders page=%s -> tiny backoff for org_id=%s", page, zoho_org_id)
                     time.sleep(1.0)
                     continue
 
@@ -215,14 +215,17 @@ def load_purchaseorders_service(start_date: Optional[str], zoho_org_id: str) -> 
                     first_lm = max(ts_vals) if ts_vals else None
                     last_lm  = min(ts_vals) if ts_vals else None
                     logger.info(
-                        "PO page=%s got=%s lm_first=%s lm_last=%s cutoff=%s",
-                        page, len(batch),
+                        "Purchase Orders org_id=%s page=%s got=%s lm_first=%s lm_last=%s cutoff=%s",
+                        zoho_org_id, page, len(batch),
                         first_lm.isoformat() if first_lm else None,
                         last_lm.isoformat()  if last_lm  else None,
                         cutoff_dt.isoformat() if cutoff_dt else None
                     )
                     if last_lm and cutoff_dt and last_lm < cutoff_dt:
-                        logger.info("Stopping paging: last_lm < cutoff (page=%s)", page)
+                        logger.info(
+                            "Stopping purchase orders paging: last_lm < cutoff (page=%s) for org_id=%s", 
+                            page, zoho_org_id
+                        )
                         break
 
                 page_ctx = payload.get("page_context", {}) or {}
@@ -235,7 +238,7 @@ def load_purchaseorders_service(start_date: Optional[str], zoho_org_id: str) -> 
                 time.sleep(ZOHO_LIST_PAGE_DELAY_SEC)
 
             except requests.exceptions.RequestException as e:
-                logger.error("Error listing purchase orders (page=%s): %s", page, e)
+                logger.error("Error listing purchase orders (page=%s) for org_id=%s: %s", page, zoho_org_id, e)
                 status = "error"
                 break
 
@@ -265,7 +268,10 @@ def load_purchaseorders_service(start_date: Optional[str], zoho_org_id: str) -> 
     candidates = candidates_all[:ZOHO_MAX_DETAILS_PER_RUN_PO]
     omitted = max(0, len(candidates_all) - len(candidates))
     if omitted:
-        logger.warning("PO detail candidates capped: %s omitted (limit=%s)", omitted, ZOHO_MAX_DETAILS_PER_RUN_PO)
+        logger.warning(
+            "Purchase Orders detail candidates capped: %s omitted (limit=%s) for org_id=%s", 
+            omitted, ZOHO_MAX_DETAILS_PER_RUN_PO, zoho_org_id
+        )
 
     # -------- Detalles (thread-safe) --------
     full_items: List[Dict[str, Any]] = []
@@ -275,7 +281,7 @@ def load_purchaseorders_service(start_date: Optional[str], zoho_org_id: str) -> 
                     for it in candidates]
             for fut in as_completed(futs):
                 if not _time_left_ok(t0):
-                    logger.warning("Budget time exhausted during PO details -> breaking")
+                    logger.warning("Budget time exhausted during Purchase Order details -> breaking for org_id=%s", zoho_org_id)
                     break
                 r = fut.result()
                 if r:
@@ -340,8 +346,8 @@ def load_purchaseorders_service(start_date: Optional[str], zoho_org_id: str) -> 
     )
 
     logger.info(
-        "Purchase Orders processed: created=%s updated=%s status=%s (hit_max_pages=%s partial=%s)",
-        created, updated, final_status, hit_max_pages, partial
+        "Purchase Orders processed: org_id=%s created=%s updated=%s status=%s (hit_max_pages=%s partial=%s)",
+        zoho_org_id, created, updated, final_status, hit_max_pages, partial
     )
 
     return {

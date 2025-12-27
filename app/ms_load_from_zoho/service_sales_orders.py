@@ -98,7 +98,7 @@ def fetch_sales_order_details(so_id: str, base_headers: Dict[str, str], zoho_org
 
             if resp.status_code == 429:
                 # throttling mínimo y “fail-soft”: mejor saltar que bloquear
-                logger.warning("429 detail salesorder_id=%s -> skip", so_id)
+                logger.warning("429 detail salesorder_id=%s -> skip in org_id=%s", so_id, zoho_org_id)
                 return None
 
             resp.raise_for_status()
@@ -107,7 +107,7 @@ def fetch_sales_order_details(so_id: str, base_headers: Dict[str, str], zoho_org
             return (resp.json() or {}).get("salesorder")
 
         except requests.exceptions.RequestException as e:
-            logger.warning("Detail error salesorder_id=%s: %s", so_id, e)
+            logger.warning("Detail error salesorder_id=%s in org_id=%s: %s", so_id, zoho_org_id, e)
             return None
 
 # ====== Servicio principal ======
@@ -142,7 +142,7 @@ def load_sales_orders_service(start_date: Optional[str], zoho_org_id: str) -> Di
     try:
         base_headers = helpers.config_headers(zoho_org_id)
     except Exception as e:
-        logger.error("Error connecting to Zoho API (headers): %s", e)
+        logger.error("Error connecting to Zoho API (headers) for org_id=%s: %s", zoho_org_id, e)
         _set_metrics(
             "salesorders",
             last_run=_now_iso(),
@@ -174,7 +174,7 @@ def load_sales_orders_service(start_date: Optional[str], zoho_org_id: str) -> Di
     with helpers._retry_session() as session:
         while True:
             if not _time_left_ok(t0):
-                logger.warning("Budget time exhausted on listing -> breaking")
+                logger.warning("Sales Orders budget time exhausted on listing for org_id=%s -> breaking", zoho_org_id)
                 break
             try:
                 params["page"] = page
@@ -187,7 +187,7 @@ def load_sales_orders_service(start_date: Optional[str], zoho_org_id: str) -> Di
                     resp = session.get(url, headers=tmp_headers, params=params, timeout=LIST_TIMEOUT_SEC)
                     list_calls += 1
                 if resp.status_code == 429:
-                    logger.warning("429 list page=%s -> tiny backoff", page)
+                    logger.warning("429 list sales orders page=%s -> tiny backoff for org_id=%s", page, zoho_org_id)
                     time.sleep(1.0)
                     continue
 
@@ -202,14 +202,14 @@ def load_sales_orders_service(start_date: Optional[str], zoho_org_id: str) -> Di
                     first_lm = max(ts_vals) if ts_vals else None
                     last_lm  = min(ts_vals) if ts_vals else None
                     logger.info(
-                        "SO page=%s got=%s lm_first=%s lm_last=%s cutoff=%s",
-                        page, len(batch),
+                        "Sales Orders org_id=%s page=%s got=%s lm_first=%s lm_last=%s cutoff=%s",
+                        zoho_org_id, page, len(batch),
                         first_lm.isoformat() if first_lm else None,
                         last_lm.isoformat()  if last_lm  else None,
                         cutoff_dt.isoformat() if cutoff_dt else None
                     )
                     if last_lm and cutoff_dt and last_lm < cutoff_dt:
-                        logger.info("Stopping paging: last_lm < cutoff (page=%s)", page)
+                        logger.info("Stopping sales orders paging for org_id=%s: last_lm < cutoff (page=%s)", zoho_org_id, page)
                         break
 
                 page_ctx = payload.get("page_context", {}) or {}
@@ -222,7 +222,7 @@ def load_sales_orders_service(start_date: Optional[str], zoho_org_id: str) -> Di
                 time.sleep(ZOHO_LIST_PAGE_DELAY_SEC)
 
             except requests.exceptions.RequestException as e:
-                logger.error("Error listing sales orders (page=%s): %s", page, e)
+                logger.error("Error listing sales orders (page=%s) for org_id=%s: %s", page, zoho_org_id, e)
                 status = "error"
                 break
 
@@ -252,7 +252,10 @@ def load_sales_orders_service(start_date: Optional[str], zoho_org_id: str) -> Di
     candidates = candidates_all[:ZOHO_MAX_DETAILS_PER_RUN_SO]
     omitted = max(0, len(candidates_all) - len(candidates))
     if omitted:
-        logger.warning("SO detail candidates capped: %s omitted (limit=%s)", omitted, ZOHO_MAX_DETAILS_PER_RUN_SO)
+        logger.warning(
+            "Sales Order detail candidates capped for org_id=%s: %s omitted (limit=%s)", 
+            zoho_org_id, omitted, ZOHO_MAX_DETAILS_PER_RUN_SO
+        )
 
     # -------- Detalles (thread-safe) --------
     full_items: List[Dict[str, Any]] = []
@@ -262,7 +265,7 @@ def load_sales_orders_service(start_date: Optional[str], zoho_org_id: str) -> Di
                     for it in candidates]
             for fut in as_completed(futs):
                 if not _time_left_ok(t0):
-                    logger.warning("Budget time exhausted during SO details -> breaking")
+                    logger.warning("Sales Orders budget time exhausted during details for org_id=%s -> breaking", zoho_org_id)
                     break
                 r = fut.result()
                 if r:
@@ -327,8 +330,8 @@ def load_sales_orders_service(start_date: Optional[str], zoho_org_id: str) -> Di
     )
 
     logger.info(
-        "Sales Orders processed: created=%s updated=%s status=%s (hit_max_pages=%s partial=%s)",
-        created, updated, final_status, hit_max_pages, partial
+        "Sales Orders processed: org_id=%s created=%s updated=%s status=%s (hit_max_pages=%s partial=%s)",
+        zoho_org_id, created, updated, final_status, hit_max_pages, partial
     )
 
     return {

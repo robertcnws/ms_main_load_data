@@ -111,7 +111,7 @@ def load_items_service(*, start_date: str | None = None, zoho_org_id: str, item_
                     if not lm or lm >= cutoff_dt:
                         items_to_process.append(it)
         except requests.RequestException as e:
-            logger.error(f"{LOG_PREFIX} Error fetching single item={item_number}: {e}")
+            logger.error(f"{LOG_PREFIX} Error fetching single item={item_number} for org_id={zoho_org_id}: {e}")
     else:
         # LIST PAGINADO
         base_url = settings.ZOHO_INVENTORY_ITEMS_URL
@@ -163,11 +163,11 @@ def load_items_service(*, start_date: str | None = None, zoho_org_id: str, item_
                 page += 1
                 time.sleep(LIST_PAGE_DELAY_SEC)
             except requests.RequestException as e:
-                logger.error(f"{LOG_PREFIX} Error fetching items page={page}: {e}")
+                logger.error(f"{LOG_PREFIX} Error fetching items page={page} for org_id={zoho_org_id}: {e}")
                 status = "error"
                 break
 
-    logger.info(f"{LOG_PREFIX} LIST after_cutoff count={len(items_to_process)} list_calls={list_calls}")
+    logger.info(f"{LOG_PREFIX} LIST after_cutoff count={len(items_to_process)} list_calls={list_calls} org_id={zoho_org_id}")
 
     # UPSERT
     ids = [it.get("item_id") for it in items_to_process if it.get("item_id")]
@@ -253,7 +253,7 @@ def load_items_service(*, start_date: str | None = None, zoho_org_id: str, item_
             status=status,
         )
 
-    logger.info(f"{LOG_PREFIX} END created={created} updated={updated} list_calls={list_calls} duration_sec={duration} status={status}")
+    logger.info(f"{LOG_PREFIX} END org_id={zoho_org_id} created={created} updated={updated} list_calls={list_calls} duration_sec={duration} status={status}")
 
     return {
         "created": created,

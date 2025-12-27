@@ -34,7 +34,7 @@ def load_invoices_service(start_date: str, zoho_org_id: str):
     try:
         headers = helpers.config_headers(zoho_org_id)
     except Exception as e:
-        logger.error("Error connecting to Zoho API (headers): %s", e)
+        logger.error("Error connecting to Zoho API (headers) for org_id=%s: %s", zoho_org_id, e)
         status = "error"
         set_metrics(
             "invoices",
@@ -88,7 +88,7 @@ def load_invoices_service(start_date: str, zoho_org_id: str):
                     err = resp.json()
                 except Exception:
                     err = {"raw": resp.text}
-                logger.error("Zoho Books list 400/err=%s status=%s", err, resp.status_code)
+                logger.error("Zoho Invoice Books list 400/err=%s status=%s org_id=%s", err, resp.status_code, zoho_org_id)
                 status = "error"
                 set_metrics(
                     "invoices",
@@ -119,7 +119,7 @@ def load_invoices_service(start_date: str, zoho_org_id: str):
             time.sleep(LIST_PAGE_DELAY)
 
         except requests.exceptions.RequestException as e:
-            logger.error("Network error fetching invoices list: %s", e)
+            logger.error("Network error fetching invoices list for org_id=%s: %s", zoho_org_id, e)
             status = "error"
             set_metrics(
                 "invoices",
@@ -237,6 +237,6 @@ def load_invoices_service(start_date: str, zoho_org_id: str):
             status=status,
     )
 
-    logger.info("Invoices processed: %s created, %s updated", created, updated)
+    logger.info("Invoices processed for org_id=%s: %s created, %s updated", zoho_org_id, created, updated)
     return JsonResponse({"message": "Invoices loaded successfully",
                          "created": created, "updated": updated}, status=200)
