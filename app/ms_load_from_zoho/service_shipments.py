@@ -185,8 +185,9 @@ def fetch_package(package_id: str, headers: Dict[str, str], zoho_org_id: str) ->
     if not package_id:
         return None
     url = f"{settings.ZOHO_INVENTORY_PACKAGES_URL}/{package_id}"
+    params = {"organization_id": zoho_org_id}
     with _new_session() as s:
-        resp = _zoho_get_light(s, url, headers, {}, zoho_org_id)
+        resp = _zoho_get_light(s, url, headers, params, zoho_org_id)
     if resp.status_code == 429:
         ra = _extract_retry_after(resp)
         logger.warning("429 %s (Retry-After=%ss) -> SKIP package detail in org_id=%s", url, ra, zoho_org_id)

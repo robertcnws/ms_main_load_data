@@ -102,8 +102,9 @@ def load_items_service(*, start_date: str | None = None, zoho_org_id: str, item_
     if item_number:
         # SINGLE
         url = f"{settings.ZOHO_INVENTORY_ITEMS_URL}/{item_number}"
+        params = {"organization_id": app_config.zoho_org_id}
         try:
-            r = _get(url, ims_headers if use_if_modified_since else headers, {"organization_id": app_config.zoho_org_id})
+            r = _get(url, ims_headers if use_if_modified_since else headers, params)
             if r.status_code != 304:
                 it = r.json().get("item", {})
                 if it:

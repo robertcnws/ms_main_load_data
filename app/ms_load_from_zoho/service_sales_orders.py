@@ -85,16 +85,17 @@ def fetch_sales_order_details(so_id: str, base_headers: Dict[str, str], zoho_org
     if not so_id:
         return None
     url = f"{settings.ZOHO_INVENTORY_SALESORDERS_URL}/{so_id}"
+    params = {"organization_id": zoho_org_id}
 
     with helpers._retry_session() as s:
         headers = dict(base_headers)  # copia local
         try:
-            resp = s.get(url, headers=headers, timeout=DETAIL_TIMEOUT_SEC)
+            resp = s.get(url, headers=headers, params=params, timeout=DETAIL_TIMEOUT_SEC)
             if resp.status_code == 401:
                 # refresh solo afecta a esta copia de headers
                 new_token = helpers.refresh_zoho_access_token(zoho_org_id)
                 headers["Authorization"] = f"Zoho-oauthtoken {new_token}"
-                resp = s.get(url, headers=headers, timeout=DETAIL_TIMEOUT_SEC)
+                resp = s.get(url, headers=headers, params=params, timeout=DETAIL_TIMEOUT_SEC)
 
             if resp.status_code == 429:
                 # throttling mínimo y “fail-soft”: mejor saltar que bloquear
