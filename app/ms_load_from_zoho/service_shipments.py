@@ -148,16 +148,23 @@ def fetch_shipment_details(list_item: Dict[str, Any], headers: Dict[str, str], z
         sid = list_item.get("shipment_id")
         if not sid:
             return None
+
         url = f"{settings.ZOHO_INVENTORY_SHIPMENTS_URL}/{sid}"
+        params = {"organization_id": zoho_org_id}
+
         with _new_session() as s:
-            resp = _zoho_get_light(s, url, headers, {}, zoho_org_id)
+            resp = _zoho_get_light(s, url, headers, params, zoho_org_id)
+
         if resp.status_code == 429:
             ra = _extract_retry_after(resp)
             logger.warning("429 %s (Retry-After=%ss) -> SKIP shipment detail in org_id=%s", url, ra, zoho_org_id)
             return None
+
         resp.raise_for_status()
+
         if ZOHO_DETAIL_THROTTLE_SEC > 0:
             time.sleep(ZOHO_DETAIL_THROTTLE_SEC)
+
         return resp.json().get("shipmentorder")
     except requests.exceptions.HTTPError as e:
         resp = getattr(e, "response", None)
