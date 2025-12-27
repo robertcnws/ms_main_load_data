@@ -144,20 +144,29 @@ def _zoho_get_light(session: requests.Session, url: str, headers: Dict[str, str]
     reraise=True,
 )
 def fetch_shipment_details(list_item: Dict[str, Any], headers: Dict[str, str], zoho_org_id: str) -> Optional[Dict[str, Any]]:
-    sid = list_item.get("shipment_id")
-    if not sid:
-        return None
-    url = f"{settings.ZOHO_INVENTORY_SHIPMENTS_URL}/{sid}"
-    with _new_session() as s:
-        resp = _zoho_get_light(s, url, headers, {}, zoho_org_id)
-    if resp.status_code == 429:
-        ra = _extract_retry_after(resp)
-        logger.warning("429 %s (Retry-After=%ss) -> SKIP shipment detail in org_id=%s", url, ra, zoho_org_id)
-        return None
-    resp.raise_for_status()
-    if ZOHO_DETAIL_THROTTLE_SEC > 0:
-        time.sleep(ZOHO_DETAIL_THROTTLE_SEC)
-    return resp.json().get("shipmentorder")
+    try:
+        sid = list_item.get("shipment_id")
+        if not sid:
+            return None
+        url = f"{settings.ZOHO_INVENTORY_SHIPMENTS_URL}/{sid}"
+        with _new_session() as s:
+            resp = _zoho_get_light(s, url, headers, {}, zoho_org_id)
+        if resp.status_code == 429:
+            ra = _extract_retry_after(resp)
+            logger.warning("429 %s (Retry-After=%ss) -> SKIP shipment detail in org_id=%s", url, ra, zoho_org_id)
+            return None
+        resp.raise_for_status()
+        if ZOHO_DETAIL_THROTTLE_SEC > 0:
+            time.sleep(ZOHO_DETAIL_THROTTLE_SEC)
+        return resp.json().get("shipmentorder")
+    except requests.exceptions.HTTPError as e:
+        resp = getattr(e, "response", None)
+        if resp is not None:
+            logger.error(
+                "Shipment detail HTTPError sid=%s org_id=%s status=%s body=%s",
+                list_item.get("shipment_id"), zoho_org_id, resp.status_code, resp.text[:2000]
+            )
+        raise
 
 @retry(
     retry=retry_if_exception_type((ZohoTooManyRequests, requests.exceptions.RequestException)),
