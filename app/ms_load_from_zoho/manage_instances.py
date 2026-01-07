@@ -57,6 +57,7 @@ def create_inventory_item_instance(logger, data, zoho_org_id):
         'stock_on_hand': data.get('stock_on_hand', 0),
         'available_stock': data.get('available_stock', 0),
         'actual_available_stock': data.get('actual_available_stock', 0),
+        'actual_available_for_sale_stock': data.get('actual_available_for_sale_stock', 0),
         'sku': data.get('sku', ''),
         'upc': data.get('upc') if isinstance(data.get('upc'), (int, float)) else 0,
         'ean': data.get('ean') if isinstance(data.get('ean'), (int, float)) else 0,

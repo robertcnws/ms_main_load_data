@@ -2,7 +2,7 @@ import os
 from ms_util.utils import to_tz_iso8601
 from ms_load_from_zoho.service_customers import load_customers_service
 from ms_load_from_zoho.service_invoices import load_invoices_service
-from ms_load_from_zoho.service_items import load_items_service
+from ms_load_from_zoho.service_items import load_items_service, load_items_field_values_backfill_stock
 from ms_load_from_zoho.service_sales_orders import load_sales_orders_service
 from ms_load_from_zoho.service_itemgroups import load_itemgroups_service
 from ms_load_from_zoho.service_purchaseorders import load_purchaseorders_service
@@ -10,7 +10,7 @@ from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from datetime import datetime, timedelta
 from django.http import HttpRequest
-from .models import AppConfig, SyncMetadata, IntegrationMetrics
+from .models import AppConfig, SyncMetadata, IntegrationMetrics, ZohoInventoryItem
 from django.conf import settings
 from ms_load_from_zoho.service_shipments import load_shipments_service
 import json
@@ -290,3 +290,27 @@ def task_load_inventory_purchaseorders():
     except Exception as e:
         logger.exception("ZOHO: purchase orders task error (global): %s", e)
         return "Task Inventory Purchase Orders Completed (with errors)"
+    
+    
+@shared_task(queue="zoho_catalog")
+def task_update_fields_items():
+    logger.info("ZOHO: update fields in items TASK START")
+    apps = AppConfig.objects.all()
+    if not apps:
+        logger.warning("No AppConfigs found")
+        return "No AppConfigs found"
+    
+    for app in apps:
+        zoho_org_id = app.zoho_org_id
+        try:
+            res = load_items_field_values_backfill_stock(zoho_org_id=zoho_org_id)
+            status = res.get("status", "ok")
+            logger.info(
+                "Update fields in Items for zoho_org_id=%s -> status=%s updated=%s",
+                zoho_org_id, status, res.get("updated_missing"),
+            )
+        except Exception as e:
+            logger.exception("Error updating fields in items for zoho_org_id=%s: %s", zoho_org_id, e)
+            return "Error updating fields in items"
+
+    return "Task Update Fields in Items Completed"

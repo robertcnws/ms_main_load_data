@@ -78,6 +78,7 @@ class ZohoInventoryItem(Document):
     stock_on_hand = IntField()
     available_stock = IntField()
     actual_available_stock = IntField()
+    actual_available_for_sale_stock = IntField(null=True)
     sku = StringField(max_length=255, null=True)
     upc = IntField(null=True)
     ean = IntField(null=True)

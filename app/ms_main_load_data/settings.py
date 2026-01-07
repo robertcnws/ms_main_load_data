@@ -385,6 +385,10 @@ CELERY_TASK_ROUTES = {
         "queue": "zoho_catalog",
         "routing_key": "zoho_catalog"
     },
+    "ms_load_from_zoho.tasks.task_update_fields_items": {
+        "queue": "zoho_catalog",
+        "routing_key": "zoho_catalog"
+    },
     
     # SENITRON
     "ms_load_from_senitron.tasks.task_load_senitron_items_assets": {
@@ -469,6 +473,7 @@ CELERY_TASK_ANNOTATIONS = {
     'ms_load_from_zoho.tasks.task_load_books_customers': {'rate_limit': '6/m'},   # 1 cada 10s
     'ms_load_from_zoho.tasks.task_load_inventory_items': {'rate_limit': '6/m'},
     'ms_load_from_zoho.tasks.task_load_inventory_itemgroups': {'rate_limit': '4/m'},
+    'ms_load_from_zoho.tasks.task_update_fields_items': {'rate_limit': '6/m'},
 
     # ventas
     'ms_load_from_zoho.tasks.task_load_inventory_sales_orders': {'rate_limit': '6/m'},
@@ -495,6 +500,13 @@ MINUTE_ZOHO_ITEMGROUPS = env('MINUTE_ZOHO_ITEMGROUPS', default='5')
 MINUTE_ZOHO_CATALOG = env('MINUTE_ZOHO_CATALOG', default='9,19,29,39,49,59')
 MINUTE_ZOHO_SHIPMENTS = env('MINUTE_ZOHO_SHIPMENTS', default='3,13,23,33,43,53')
 MINUTE_ZOHO_PURCHASES = env('MINUTE_ZOHO_PURCHASES', default='0,10,20,30,40,50')
+
+CRONTAB_ZOHO_ITEMS_UPDATE_FIELDS = crontab(
+    minute='0,5,10,15,20,25,30,35,40,45,50,55',
+    hour='*/1',
+    day_of_week=DAY_OF_WEEK_MONDAY_TO_SATURDAY
+)
+
 # # SALES
 CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY = crontab(
     minute=MINUTE_ZOHO_SALES, 
@@ -578,36 +590,41 @@ CRONTAB_SENITRON_SUNDAY = crontab(
 # SCHEDULES
 CELERY_BEAT_SCHEDULE = {
     # MONDAY_TO_SATURDAY
-    'run-task-sequence-zoho-customers-items-monday-saturday': {
-        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_customers_items',
-        'schedule': CRONTAB_ZOHO_CATALOG_MONDAY_TO_SATURDAY,
-        'options': {'queue': 'zoho_catalog'},        # <-- importante
+    'run-task-items-update-fields-monday-saturday': {
+        'task': 'ms_load_from_zoho.tasks.task_update_fields_items',
+        'schedule': CRONTAB_ZOHO_ITEMS_UPDATE_FIELDS,
+        'options': {'queue': 'zoho_catalog'},
     },
-    'run-task-sequence-zoho-itemgroups-monday-saturday': {
-        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_itemgroups',
-        'schedule': CRONTAB_ZOHO_ITEMGROUPS_MONDAY_TO_SATURDAY,
-        'options': {'queue': 'zoho_catalog'},        # <-- importante
-    },
-    'run-task-sequence-zoho-sales-monday-saturday': {
-        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales',
-        'schedule': CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY,
-        'options': {'queue': 'zoho_sales'},        # <-- importante
-    },
-    'run-task-sequence-zoho-shipments-monday-saturday': {
-        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_shipments',
-        'schedule': CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY,
-        'options': {'queue': 'zoho_shipments'},        # <-- importante
-    },
-    'run-task-sequence-senitron-monday-saturday': {
-        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
-        'schedule': CRONTAB_SENITRON_MONDAY_TO_SATURDAY,
-        'options': {'queue': 'senitron'},    # <-- importante
-    },
-    'run-task-sequence-zoho-purchases-monday-saturday': {
-        'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_purchases',
-        'schedule': CRONTAB_ZOHO_PURCHASES_MONDAY_TO_SATURDAY,
-        'options': {'queue': 'zoho_purchases'},        # <-- importante
-    },
+    # 'run-task-sequence-zoho-customers-items-monday-saturday': {
+    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_customers_items',
+    #     'schedule': CRONTAB_ZOHO_CATALOG_MONDAY_TO_SATURDAY,
+    #     'options': {'queue': 'zoho_catalog'},        # <-- importante
+    # },
+    # 'run-task-sequence-zoho-itemgroups-monday-saturday': {
+    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_itemgroups',
+    #     'schedule': CRONTAB_ZOHO_ITEMGROUPS_MONDAY_TO_SATURDAY,
+    #     'options': {'queue': 'zoho_catalog'},        # <-- importante
+    # },
+    # 'run-task-sequence-zoho-sales-monday-saturday': {
+    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_sales',
+    #     'schedule': CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY,
+    #     'options': {'queue': 'zoho_sales'},        # <-- importante
+    # },
+    # 'run-task-sequence-zoho-shipments-monday-saturday': {
+    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_shipments',
+    #     'schedule': CRONTAB_ZOHO_SALES_MONDAY_TO_SATURDAY,
+    #     'options': {'queue': 'zoho_shipments'},        # <-- importante
+    # },
+    # 'run-task-sequence-senitron-monday-saturday': {
+    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_senitron',
+    #     'schedule': CRONTAB_SENITRON_MONDAY_TO_SATURDAY,
+    #     'options': {'queue': 'senitron'},    # <-- importante
+    # },
+    # 'run-task-sequence-zoho-purchases-monday-saturday': {
+    #     'task': 'ms_load_sequence_tasks.tasks.task_sequence_by_zoho_purchases',
+    #     'schedule': CRONTAB_ZOHO_PURCHASES_MONDAY_TO_SATURDAY,
+    #     'options': {'queue': 'zoho_purchases'},        # <-- importante
+    # },
 
     # SUNDAY
     'run-task-sequence-zoho-customers-items-sunday': {
