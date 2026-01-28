@@ -452,6 +452,8 @@ def invoices(request):
     
     zoho_org_id = data.get('zoho_org_id', None)
     
+    salesorders_ids = data.get('salesorders_ids', None)
+    
     try:
         if start_last_modified_time:
             start_last_modified_time = dt.strptime(start_last_modified_time, '%Y-%m-%d')
@@ -487,6 +489,10 @@ def invoices(request):
         
     if zoho_org_id:
         queryset = queryset.filter(zoho_org_id=zoho_org_id)
+        
+    if salesorders_ids:
+        salesorders_ids = salesorders_ids.split(',')
+        queryset = [doc for doc in queryset if doc.get('salesorder_id') in salesorders_ids]
 
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoFullInvoice)
     if valid_for_only:
@@ -1007,6 +1013,12 @@ def invoices_to_rewards_points(request):
     customer_id = params.get('customer_id', None)
     if customer_id:
         queryset = queryset.filter(customer_id=customer_id)
+        
+    
+    salesorders_ids = params.get('salesorders_ids', None)
+    if salesorders_ids:
+        salesorders_ids = salesorders_ids.split(',')
+        queryset = [doc for doc in queryset if doc.get('salesorder_id') in salesorders_ids]
 
     invoices_in_zoho_nws = list(queryset)
     

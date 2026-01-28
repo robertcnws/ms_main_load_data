@@ -204,7 +204,7 @@ def load_purchaseorders_service(start_date: Optional[str], zoho_org_id: str) -> 
                     logger.warning("429 list purchaseorders page=%s -> tiny backoff for org_id=%s", page, zoho_org_id)
                     time.sleep(1.0)
                     continue
-
+#GREETINGS FROM LIBETT NO SE BAJAR LOS INVOICES
                 resp.raise_for_status()
                 payload = resp.json() if resp.content else {}
                 batch = payload.get("purchaseorders", []) or []
