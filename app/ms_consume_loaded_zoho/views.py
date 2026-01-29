@@ -491,8 +491,8 @@ def invoices(request):
         queryset = queryset.filter(zoho_org_id=zoho_org_id)
         
     if salesorders_ids:
-        salesorders_ids = salesorders_ids.split(',')
-        queryset = [doc for doc in queryset if doc.salesorder_id in salesorders_ids]
+        salesorders_ids = [x.strip() for x in salesorders_ids.split(",") if x.strip()]
+        queryset = queryset.filter(salesorder_id__in=salesorders_ids)
 
     requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoFullInvoice)
     if valid_for_only:
@@ -1015,10 +1015,10 @@ def invoices_to_rewards_points(request):
         queryset = queryset.filter(customer_id=customer_id)
         
     
-    salesorders_ids = params.get('salesorders_ids', None)
+    salesorders_ids = params.get("salesorders_ids")
     if salesorders_ids:
-        salesorders_ids = salesorders_ids.split(',')
-        queryset = [doc for doc in queryset if doc.salesorder_id in salesorders_ids]
+        salesorders_ids = [x.strip() for x in salesorders_ids.split(",") if x.strip()]
+        queryset = queryset.filter(salesorder_id__in=salesorders_ids)
 
     invoices_in_zoho_nws = list(queryset)
     
