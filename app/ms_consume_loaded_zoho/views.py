@@ -1035,7 +1035,7 @@ def invoices_to_rewards_points(request):
     
     invoices_in_zoho_nws = [
         transform_data_to_mongo(invoice) for invoice in invoices_in_zoho_nws \
-        if invoice.get('zoho_org_id', '') == settings.ZOHO_ORG_ID
+        if invoice.zoho_org_id == settings.ZOHO_ORG_ID
     ]
     
     return Response({
