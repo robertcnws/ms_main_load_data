@@ -15,6 +15,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from django.conf import settings
 from ms_util.utils import to_tz_iso8601
 from mongoengine.queryset.visitor import Q
+from mongoengine import ValidationError
+from bson.errors import InvalidDocument
 
 from ms_load_from_zoho import helpers
 from ms_load_from_zoho.purchaseorder_instance import create_purchaseorder_instance
@@ -310,16 +312,44 @@ def load_purchaseorders_service(start_date: Optional[str], zoho_org_id: str) -> 
         ZohoPurchaseOrder.objects.insert(new_docs, load_bulk=False)
         created = len(new_docs)
 
+    SKIP_FIELDS = {"id", "_id", "_cls"}  # agrega aquí los pesados si aplica
+
     if upd_docs:
         for d in upd_docs:
-            obj = ZohoPurchaseOrder.objects(purchaseorder_id=d.purchaseorder_id).first()
-            if obj:
-                # copiar campos genéricamente
+            try:
+                obj = ZohoPurchaseOrder.objects(purchaseorder_id=d.purchaseorder_id).first()
+                if not obj:
+                    continue
+
                 for f in d._fields:
-                    if f in ("id",):
+                    if f in SKIP_FIELDS:
                         continue
-                    setattr(obj, f, getattr(d, f))
-                obj.save()
+                    if f not in obj._fields:
+                        continue
+
+                    try:
+                        setattr(obj, f, getattr(d, f))
+                    except Exception as e:
+                        logger.exception(
+                            "Error seteando campo %s en PO %s (valor=%r)",
+                            f, d.purchaseorder_id, getattr(d, f, None)
+                        )
+                        raise
+
+                obj.save()  # aquí suele explotar
+
+            except (ValidationError, InvalidDocument) as e:
+                logger.exception(
+                    "Error guardando PO %s: %s",
+                    getattr(d, "purchaseorder_id", None), e
+                )
+                continue
+            except Exception as e:
+                logger.exception(
+                    "Error inesperado en PO %s: %s",
+                    getattr(d, "purchaseorder_id", None), e
+                )
+                continue
         updated = len(upd_docs)
 
     # actualizar last_sync si no fue parcial por límites o páginas
