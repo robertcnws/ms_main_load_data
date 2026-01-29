@@ -1020,7 +1020,7 @@ def invoices_to_rewards_points(request):
         salesorders_ids = [x.strip() for x in salesorders_ids.split(",") if x.strip()]
         queryset = queryset.filter(salesorder_id__in=salesorders_ids)
 
-    invoices_in_zoho_nws = list(queryset)
+    invoices_in_zoho_nws = [invoice for invoice in queryset if invoice.zoho_org_id == settings.ZOHO_ORG_ID]
     
     only_fields = params.get('only_fields', None)
     if only_fields:
@@ -1033,10 +1033,10 @@ def invoices_to_rewards_points(request):
                 db_field_map=db_field_map
             )
     
-    invoices_in_zoho_nws = [
-        transform_data_to_mongo(invoice) for invoice in invoices_in_zoho_nws \
-        if invoice.zoho_org_id == settings.ZOHO_ORG_ID
-    ]
+    # invoices_in_zoho_nws = [
+    #     transform_data_to_mongo(invoice) for invoice in invoices_in_zoho_nws \
+    #     if invoice.zoho_org_id == settings.ZOHO_ORG_ID
+    # ]
     
     return Response({
         'count': len(invoices_in_zoho_nws),
