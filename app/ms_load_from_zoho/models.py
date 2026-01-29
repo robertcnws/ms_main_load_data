@@ -650,8 +650,8 @@ class ZohoPurchaseOrder(Document):
     custom_fields = ListField(DynamicField())
     line_items = ListField(DynamicField())
     taxes = ListField(DynamicField())
-    billing_address = ListField(DynamicField())
-    delivery_address = ListField(DynamicField())
+    billing_address = DictField(default=dict)
+    delivery_address = DictField(default=dict)
     purchasereceives = ListField(DynamicField())
     bills = ListField(DynamicField())
 
