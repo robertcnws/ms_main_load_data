@@ -1033,10 +1033,7 @@ def invoices_to_rewards_points(request):
                 db_field_map=db_field_map
             )
     
-    # invoices_in_zoho_nws = [
-    #     transform_data_to_mongo(invoice) for invoice in invoices_in_zoho_nws \
-    #     if invoice.zoho_org_id == settings.ZOHO_ORG_ID
-    # ]
+    invoices_in_zoho_nws = [transform_data_to_mongo(invoice) for invoice in invoices_in_zoho_nws]
     
     return Response({
         'count': len(invoices_in_zoho_nws),
