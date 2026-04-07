@@ -1,5 +1,6 @@
 from mongoengine import (
     Document,
+    DynamicDocument,
     StringField,
     BooleanField,
     DateTimeField,
@@ -106,7 +107,7 @@ class ZohoInventoryItem(Document):
         return self.name
 
 
-class ZohoInventoryShipmentSalesOrder(Document):
+class ZohoInventoryShipmentSalesOrder(DynamicDocument):
     salesorder_id = StringField(max_length=255, unique=True)
     salesorder_number = StringField(max_length=255, null=True)
     date = DateTimeField(null=True)
@@ -422,7 +423,7 @@ class TimelineItem(Document):
         return f"Item {self.item_number} - {self.actual_stock_on_hand or 'N/A'} - {self.date_actual_stock_on_hand or 'N/A'}"
 
 
-class ZohoFullInvoice(Document):
+class ZohoFullInvoice(DynamicDocument):
     invoice_id = StringField(max_length=255, unique=True)
     invoice_number = StringField(max_length=255, required=True)
     date = DateTimeField(null=True)
