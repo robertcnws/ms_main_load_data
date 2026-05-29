@@ -14,5 +14,6 @@ urlpatterns = [
     path("refetch_salesorder/<str:zoho_org_id>/<str:salesorder_number>/", views.refetch_salesorder, name="refetch_salesorder"),
     path("packages/", views.packages, name="packages"),
     path("invoices/", views.invoices, name="invoices"),
+    path("purchase_orders/", views.purchase_orders, name="purchase_orders"),
     path("delete/sales_orders/", views.delete_sales_orders, name="delete_sales_orders"),
 ]

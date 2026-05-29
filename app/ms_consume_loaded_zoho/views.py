@@ -19,7 +19,8 @@ from ms_load_from_zoho.models import (
                                         ZohoCustomer,
                                         ZohoFullInvoice,
                                         ZohoInventoryShipmentSalesOrder,
-                                        ZohoItemGroup
+                                        ZohoItemGroup,
+                                        ZohoPurchaseOrder
                                      )
 from ms_load_from_zoho.helpers import (
                                         config_headers,
@@ -523,8 +524,104 @@ def invoices(request):
         'previous': paginator.get_previous_link(),
         'results': items_list,
     }, status=status.HTTP_200_OK)
-    
-    
+
+
+@api_view(['GET'])
+@authentication_classes([MongoTokenAuthentication])
+@permission_classes([IsAuthenticated])
+def purchase_orders(request):
+
+    data = request.query_params.dict()
+    queryset = ZohoPurchaseOrder.objects.all()
+
+    start_date = data.get('start_date', None)
+    end_date = data.get('end_date', None)
+    only_fields = data.get('only_fields', None)
+
+    start_last_modified_time = data.get('start_last_modified_time', None)
+    end_last_modified_time = data.get('end_last_modified_time', None)
+
+    zoho_org_id = data.get('zoho_org_id', None)
+
+    salesorders_ids = data.get('salesorders_ids', None)
+
+    purchaseorders_ids = data.get('purchaseorders_ids', None)
+
+    try:
+        if start_last_modified_time:
+            start_last_modified_time = dt.strptime(start_last_modified_time, '%Y-%m-%d')
+        if end_last_modified_time:
+            end_last_modified_time = dt.strptime(end_last_modified_time, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+    except ValueError:
+        logger.error('Invalid date format')
+        return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+    if start_last_modified_time and end_last_modified_time:
+        if start_last_modified_time > end_last_modified_time:
+            logger.error(f'Invalid date range: [{start_last_modified_time} - {end_last_modified_time}]')
+            return Response({'error': 'Invalid date range'}, status=status.HTTP_400_BAD_REQUEST)
+        queryset = queryset.filter(last_modified_time__gte=start_last_modified_time, last_modified_time__lte=end_last_modified_time)
+
+    try:
+        if start_date:
+            start_date = dt.strptime(start_date, '%Y-%m-%d')
+        if end_date:
+            end_date = dt.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+    except ValueError:
+        logger.error('Invalid date format')
+        return Response({'error': 'Invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if start_date and end_date:
+        if start_date > end_date:
+            logger.error(f'Invalid date range: [{start_date} - {end_date}]')
+            return Response({'error': 'Invalid date range'}, status=status.HTTP_400_BAD_REQUEST)
+        queryset = queryset.filter(date__gte=start_date, date__lte=end_date)
+    elif start_date and not end_date:
+        queryset = queryset.filter(date__gte=start_date)
+    elif end_date and not start_date:
+        queryset = queryset.filter(date__lte=end_date)
+
+    if zoho_org_id:
+        queryset = queryset.filter(zoho_org_id=zoho_org_id)
+
+    if salesorders_ids:
+        salesorders_ids = [x.strip() for x in salesorders_ids.split(",") if x.strip()]
+        queryset = queryset.filter(salesorder_id__in=salesorders_ids)
+
+    if purchaseorders_ids:
+        purchaseorders_ids = [x.strip() for x in purchaseorders_ids.split(",") if x.strip()]
+        queryset = queryset.filter(purchaseorder_id__in=purchaseorders_ids)
+
+    requested, valid_for_only, db_field_map = _normalize_only_fields(only_fields, ZohoPurchaseOrder)
+    if valid_for_only:
+        queryset = queryset.only(*valid_for_only)
+
+    paginator = CustomPagination()
+    paginated_queryset = paginator.paginate_queryset(queryset, request)
+    iterable = paginated_queryset if paginated_queryset is not None else queryset
+
+    items_list = filtered_list_from_only_fields(
+        iterable,
+        requested_fields=requested,
+        valid_fields=valid_for_only,
+        db_field_map=db_field_map
+    )
+
+    logger.info(
+        f'Purchase orders read: {len(items_list)}, '
+        f'paginated: {len(paginated_queryset)}, '
+        f'Count: {paginator.page.paginator.count}, '
+        f'Number: {paginator.page.number}, '
+        f'Number of pages: {paginator.page.paginator.num_pages}'
+    )
+
+    return Response({
+        'count': paginator.page.paginator.count if paginator.page else len(items_list),
+        'next': paginator.get_next_link(),
+        'previous': paginator.get_previous_link(),
+        'results': items_list,
+    }, status=status.HTTP_200_OK)
+
+
 @api_view(['GET'])
 @authentication_classes([MongoTokenAuthentication])
 @permission_classes([IsAuthenticated])
